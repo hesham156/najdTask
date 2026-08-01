@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { prisma } from '@/lib/prisma';
+import { insensitive, prisma } from '@/lib/prisma';
 import { forbidden, ok, requireUser, route } from '@/lib/api';
 import { can } from '@/lib/permissions';
 
@@ -16,7 +16,13 @@ export const GET = route(async (request: Request) => {
 
   const customers = await prisma.customer.findMany({
     where: q
-      ? { OR: [{ name: { contains: q } }, { phone: { contains: q } }, { company: { contains: q } }] }
+      ? {
+          OR: [
+            { name: { contains: q, ...insensitive } },
+            { phone: { contains: q } },
+            { company: { contains: q, ...insensitive } },
+          ],
+        }
       : undefined,
     orderBy: { name: 'asc' },
     take: 50,

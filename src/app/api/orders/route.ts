@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { prisma } from '@/lib/prisma';
+import { insensitive, prisma } from '@/lib/prisma';
 import { forbidden, ok, requireUser, route } from '@/lib/api';
 import { allowedProductionTypes, can } from '@/lib/permissions';
 import { allocateOrderNumber, getSettings, logActivity } from '@/lib/orders';
@@ -28,9 +28,9 @@ export const GET = route(async (request: Request) => {
     ...(q
       ? {
           OR: [
-            { title: { contains: q } },
-            { customerName: { contains: q } },
-            { description: { contains: q } },
+            { title: { contains: q, ...insensitive } },
+            { customerName: { contains: q, ...insensitive } },
+            { description: { contains: q, ...insensitive } },
             ...(numeric !== undefined ? [{ number: numeric }] : []),
           ],
         }

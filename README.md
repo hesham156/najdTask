@@ -31,18 +31,38 @@
 
 ## التشغيل محليًا
 
+المشروع مضبوط على **PostgreSQL** لأنه هدف النشر. عندك طريقتان:
+
+**أ) على قاعدة Railway نفسها** (الأسهل) — انسخ `DATABASE_URL` العام من خدمة
+Postgres في Railway وحطّه في `.env`:
+
 ```bash
 npm install
-npx prisma db push
-npm run db:seed
+cp .env.example .env      # ثم حرّر DATABASE_URL و AUTH_SECRET
+npx prisma migrate deploy
+SEED_DEMO=true npm run db:seed
 npm run dev
 ```
 
+**ب) على SQLite بدون أي سيرفر:**
+
+```bash
+npm install
+npm run db:use-sqlite     # يبدّل المحرك
+# اضبط DATABASE_URL="file:./dev.db" في .env
+npx prisma db push
+SEED_DEMO=true npm run db:seed
+npm run dev
+```
+
+> ⚠️ لو اخترت (ب) فلا تعمل commit لملف `prisma/schema.prisma` بعد التبديل —
+> Railway يحتاجه على `postgresql`. رجّعه بـ `npm run db:use-postgres`.
+
 افتح <http://localhost:3000> وسجّل الدخول بـ `admin` / `admin123`.
 
-> **غيّر كلمة مرور الأدمن فورًا** من شاشة المستخدمين قبل أي استخدام حقيقي.
-
 ### حسابات تجريبية
+
+تُنشأ فقط عند `SEED_DEMO=true` — لا تُنشأ على الإنتاج.
 
 | المستخدم | كلمة المرور | الدور | يشوف إيه |
 |---|---|---|---|
@@ -91,7 +111,8 @@ npm run dev
 | الطبقة | الاختيار |
 |---|---|
 | الإطار | Next.js 14 (App Router) + React 18 + TypeScript |
-| قاعدة البيانات | Prisma — SQLite محليًا، PostgreSQL أونلاين |
+| قاعدة البيانات | Prisma + PostgreSQL (والمخطط يعمل على SQLite كذلك) |
+| الاستضافة | Railway — التطبيق + Postgres + Volume للمرفقات |
 | الواجهة | Tailwind CSS بدعم RTL + خط Cairo |
 | السحب والإفلات | dnd-kit (يدعم اللمس والكيبورد) |
 | المصادقة | JWT في httpOnly cookie (jose) + bcrypt |
@@ -107,25 +128,73 @@ npm run dev
 
 ---
 
-## النشر أونلاين
+## النشر على Railway
+
+المشروع فيه [`railway.json`](railway.json) جاهز. الخطوات:
+
+### 1. أنشئ المشروع والخدمات
+
+- **New Project ← Deploy from GitHub repo** واختر `najdTask`.
+- داخل نفس المشروع: **New ← Database ← Add PostgreSQL**.
+
+### 2. اضبط متغيرات البيئة في خدمة التطبيق
+
+| المتغير | القيمة |
+|---|---|
+| `DATABASE_URL` | `${{ Postgres.DATABASE_URL }}` ← اكتبها بالضبط كده، Railway بيحلّها لوحده |
+| `AUTH_SECRET` | مفتاح عشوائي طويل (طريقة توليده تحت) |
+| `ADMIN_PASSWORD` | كلمة مرور قوية لحساب `admin` |
+| `UPLOAD_DIR` | `/data/uploads` |
+| `MAX_UPLOAD_MB` | `50` |
+
+توليد `AUTH_SECRET`:
 
 ```bash
-npm run db:use-postgres          # يبدّل محرك Prisma إلى PostgreSQL
-# حدّث DATABASE_URL و AUTH_SECRET في .env
-npx prisma db push
-npm run db:seed
-npm run build && npm start
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-المخطط مكتوب بدون `enum` أو مصفوفات، فالانتقال بين SQLite و PostgreSQL آمن في
-الاتجاهين.
+> لا تضبط `SEED_DEMO` على الإنتاج — لو ضبطتها `true` هتتعمل حسابات بكلمة مرور
+> `123456` وأوردرات وهمية.
 
-**مهم قبل النشر:**
+### 3. أضف Volume للمرفقات ← خطوة إجبارية
 
-- ولّد `AUTH_SECRET` عشوائيًا: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`
-- المرفقات تُحفظ في مجلد `uploads/` على القرص. على استضافة قرصها مؤقت (مثل Vercel)
-  استبدل الدوال الثلاث في `src/lib/storage.ts` بمكتبة S3/R2 — بقية النظام لا تحتاج تعديلًا.
-- الـ PWA يحتاج HTTPS ليعمل التثبيت (عدا `localhost`).
+في خدمة التطبيق: **Settings ← Volumes ← New Volume**، ومسار التوصيل `/data`.
+
+بدون الـ Volume كل الملفات المرفوعة **هتضيع مع كل إعادة نشر**، لأن قرص الحاوية
+مؤقت. الـ `UPLOAD_DIR=/data/uploads` بيخلي المرفقات على القرص الدائم.
+
+### 4. انشر
+
+Railway هينفّذ تلقائيًا:
+
+```
+npm run build
+npm run start:railway   →   prisma migrate deploy && tsx prisma/seed.ts && next start
+```
+
+يعني كل نشر: يطبّق أي migrations جديدة، يتأكد إن الأدوار وحساب admin موجودين،
+ثم يشغّل التطبيق. الـ seed **لا يعدّل** أي دور موجود، فتخصيصاتك للصلاحيات لا
+تُمسح عند إعادة النشر.
+
+الفحص الصحي على `/api/health` — بيختبر الاتصال بقاعدة البيانات فعليًا، فلو
+`DATABASE_URL` غلط هيفشل النشر بوضوح بدل ما يطلع تطبيق مكسور.
+
+### 5. بعد أول نشر
+
+- ادخل بـ `admin` وكلمة المرور اللي حطيتها في `ADMIN_PASSWORD`.
+- من **الإعدادات** اضبط اسم المطبعة ورقم بداية الأوردرات.
+- من **الأدوار والصلاحيات** ظبّط الأدوار على فريقك.
+- من **المستخدمون** أضف الموظفين.
+
+### تغيير الـ schema لاحقًا
+
+```bash
+# بعد تعديل prisma/schema.prisma
+npx prisma migrate dev --name وصف_التغيير
+git add prisma/migrations && git commit && git push
+```
+
+Railway هيطبّق الـ migration الجديد تلقائيًا في النشر التالي.
 
 ---
 
@@ -143,7 +212,9 @@ npm run build && npm start
 |---|---|
 | `npm run dev` | تشغيل التطوير |
 | `npm run build` | بناء الإنتاج |
+| `npm run db:deploy` | تطبيق الـ migrations (اللي بيشتغل على Railway) |
+| `npm run db:migrate` | إنشاء migration جديد بعد تعديل الـ schema |
 | `npm run db:studio` | واجهة استعراض قاعدة البيانات |
-| `npm run db:seed` | إعادة تجهيز الأدوار والبيانات التجريبية |
-| `npm run db:use-postgres` | التبديل إلى PostgreSQL |
+| `npm run db:seed` | التأكد من وجود الأدوار وحساب admin (آمن للتكرار) |
+| `npm run db:use-sqlite` / `db:use-postgres` | تبديل محرك قاعدة البيانات |
 | `node scripts/make-icons.mjs` | إعادة توليد أيقونات التطبيق |

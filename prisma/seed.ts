@@ -1,9 +1,17 @@
 /**
- * بيانات البداية: الأدوار الافتراضية، مستخدم الأدمن، الإعدادات، وأوردرات تجريبية.
+ * تجهيز البيانات الأولية — مصمَّم ليُشغَّل بأمان عند كل نشر.
  *
- * الأدوار هنا ليست ثابتة — الأدمن يقدر يعدّلها بالكامل من شاشة "الأدوار
- * والصلاحيات". هي مجرد نقطة انطلاق تغطي أدوار المطبعة المعتادة، وأهمها
- * أدوار عمّال الإنتاج: كل واحد يرى عمود نوعه فقط.
+ * ثلاث قواعد تحكم هذا الملف:
+ *
+ * 1) لا يعدّل أبدًا دورًا موجودًا. لو أنشأ الأدمن الأدوار ثم عدّل صلاحياتها من
+ *    الواجهة، فإعادة النشر لا يجوز أن تعيدها إلى الافتراضي. الأدوار تُنشأ مرة
+ *    واحدة فقط عند غيابها.
+ *
+ * 2) كلمة مرور الأدمن تأتي من متغير البيئة ADMIN_PASSWORD. القيمة الافتراضية
+ *    للتطوير المحلي فقط ويُطبع تحذير واضح عند استخدامها.
+ *
+ * 3) الحسابات التجريبية (offset/digital/...) وبياناتها لا تُنشأ إلا عند ضبط
+ *    SEED_DEMO=true. لا نضع حسابات بكلمات مرور ضعيفة على سيرفر إنتاج.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -13,6 +21,9 @@ import { ALL_PERMISSIONS } from '../src/lib/permissions';
 import { serializeList } from '../src/lib/serialize';
 
 const prisma = new PrismaClient();
+
+const SEED_DEMO = process.env.SEED_DEMO === 'true';
+const DEFAULT_ADMIN_PASSWORD = 'admin123';
 
 type RoleSeed = {
   key: string;
@@ -141,23 +152,32 @@ const ROLES: RoleSeed[] = [
   },
 ];
 
-async function main() {
-  console.log('⏳ جارٍ تجهيز البيانات الأولية...');
+const DEMO_USERS = [
+  { username: 'manager', name: 'أحمد مدير الإنتاج', roleKey: 'production_manager' },
+  { username: 'reception', name: 'سارة خدمة العملاء', roleKey: 'reception' },
+  { username: 'designer', name: 'محمود المصمم', roleKey: 'designer' },
+  { username: 'offset', name: 'عم رمضان (أوفست)', roleKey: 'offset_operator' },
+  { username: 'digital', name: 'كريم (ديجيتال)', roleKey: 'digital_operator' },
+  { username: 'indoor', name: 'مصطفى (اندور)', roleKey: 'indoor_operator' },
+  { username: 'reviewer', name: 'هدى المراجعة', roleKey: 'reviewer' },
+  { username: 'accountant', name: 'إيهاب المحاسب', roleKey: 'accountant' },
+];
 
-  // ── الأدوار ──
+async function main() {
+  console.log('⏳ جارٍ تجهيز البيانات...');
+
+  // ── الأدوار: تُنشأ عند غيابها فقط ──
   const roleIds = new Map<string, string>();
+  let createdRoles = 0;
+
   for (const role of ROLES) {
+    const before = await prisma.role.findUnique({ where: { key: role.key } });
+
+    // upsert بتحديث فارغ: ينشئ الدور إن غاب، ولا يلمسه إن وُجد.
+    // كونها عملية واحدة يجعلها آمنة أيضًا لو بدأت نسختان من التطبيق معًا.
     const saved = await prisma.role.upsert({
       where: { key: role.key },
-      update: {
-        name: role.name,
-        description: role.description,
-        isAdmin: role.isAdmin ?? false,
-        isSystem: role.isSystem ?? false,
-        permissions: serializeList(role.permissions),
-        visibleStages: serializeList(role.visibleStages),
-        productionTypes: serializeList(role.productionTypes),
-      },
+      update: {},
       create: {
         key: role.key,
         name: role.name,
@@ -169,57 +189,84 @@ async function main() {
         productionTypes: serializeList(role.productionTypes),
       },
     });
+
     roleIds.set(role.key, saved.id);
+    if (!before) createdRoles++;
   }
-  console.log(`✅ ${ROLES.length} أدوار`);
+
+  console.log(
+    createdRoles > 0
+      ? `✅ أُنشئ ${createdRoles} دور جديد (${ROLES.length - createdRoles} موجود مسبقًا ولم يُمَس)`
+      : `✅ كل الأدوار موجودة — لم يُعدَّل شيء`,
+  );
 
   // ── الإعدادات ──
   await prisma.settings.upsert({
     where: { id: 'settings' },
     update: {},
-    create: {
-      id: 'settings',
-      companyName: 'مطبعة نجد',
-      orderNumberPrefix: '',
-      orderNumberStart: 1,
-      nextOrderNumber: 1,
-    },
+    create: { id: 'settings' },
   });
   console.log('✅ الإعدادات');
 
-  // ── المستخدمون ──
-  const users: { username: string; name: string; roleKey: string; password: string }[] = [
-    { username: 'admin', name: 'المدير العام', roleKey: 'admin', password: 'admin123' },
-    { username: 'manager', name: 'أحمد مدير الإنتاج', roleKey: 'production_manager', password: '123456' },
-    { username: 'reception', name: 'سارة خدمة العملاء', roleKey: 'reception', password: '123456' },
-    { username: 'designer', name: 'محمود المصمم', roleKey: 'designer', password: '123456' },
-    { username: 'offset', name: 'عم رمضان (أوفست)', roleKey: 'offset_operator', password: '123456' },
-    { username: 'digital', name: 'كريم (ديجيتال)', roleKey: 'digital_operator', password: '123456' },
-    { username: 'indoor', name: 'مصطفى (اندور)', roleKey: 'indoor_operator', password: '123456' },
-    { username: 'reviewer', name: 'هدى المراجعة', roleKey: 'reviewer', password: '123456' },
-    { username: 'accountant', name: 'إيهاب المحاسب', roleKey: 'accountant', password: '123456' },
-  ];
+  // ── حساب الأدمن ──
+  const adminExists = await prisma.user.findUnique({ where: { username: 'admin' } });
 
+  if (adminExists) {
+    console.log('✅ حساب admin موجود — كلمة مروره لم تتغيّر');
+  } else {
+    const password = process.env.ADMIN_PASSWORD || DEFAULT_ADMIN_PASSWORD;
+
+    await prisma.user.upsert({
+      where: { username: 'admin' },
+      update: {},
+      create: {
+        username: 'admin',
+        name: 'المدير العام',
+        passwordHash: await bcrypt.hash(password, 10),
+        roleId: roleIds.get('admin')!,
+      },
+    });
+
+    if (!process.env.ADMIN_PASSWORD) {
+      console.warn(
+        '\n⚠️  تم إنشاء admin بكلمة المرور الافتراضية "admin123".\n' +
+          '   للإنتاج: اضبط ADMIN_PASSWORD قبل أول تشغيل، أو غيّر كلمة المرور\n' +
+          '   فورًا من شاشة المستخدمين بعد أول دخول.\n',
+      );
+    } else {
+      console.log('✅ أُنشئ حساب admin بكلمة المرور من ADMIN_PASSWORD');
+    }
+  }
+
+  // ── ما بعده تجريبي فقط ──
+  if (!SEED_DEMO) {
+    console.log('\nℹ️  تم تخطي الحسابات والبيانات التجريبية.');
+    console.log('   لإنشائها في بيئة تطوير: SEED_DEMO=true npm run db:seed');
+    return;
+  }
+
+  let createdUsers = 0;
   const userIds = new Map<string, string>();
-  for (const u of users) {
+
+  for (const u of DEMO_USERS) {
+    const before = await prisma.user.findUnique({ where: { username: u.username } });
     const saved = await prisma.user.upsert({
       where: { username: u.username },
-      update: { name: u.name, roleId: roleIds.get(u.roleKey)! },
+      update: {},
       create: {
         username: u.username,
         name: u.name,
-        passwordHash: await bcrypt.hash(u.password, 10),
+        passwordHash: await bcrypt.hash('123456', 10),
         roleId: roleIds.get(u.roleKey)!,
       },
     });
     userIds.set(u.username, saved.id);
+    if (!before) createdUsers++;
   }
-  console.log(`✅ ${users.length} مستخدمين`);
+  console.log(`✅ ${createdUsers} حساب تجريبي جديد (كلمة المرور 123456)`);
 
-  // ── بيانات تجريبية ──
-  const existingOrders = await prisma.order.count();
-  if (existingOrders > 0) {
-    console.log('ℹ️  توجد أوردرات بالفعل — تم تخطي البيانات التجريبية');
+  if ((await prisma.order.count()) > 0) {
+    console.log('ℹ️  توجد أوردرات بالفعل — تم تخطي الأوردرات التجريبية');
     return;
   }
 
@@ -233,7 +280,7 @@ async function main() {
 
   const receptionId = userIds.get('reception')!;
 
-  // أوردر فيه أوفست وديجيتال معًا — يوضّح كيف يرى كل عامل بنده فقط
+  // أوردر فيه أوفست وديجيتال واندور معًا — يوضّح كيف يرى كل عامل بنده فقط
   const order1 = await prisma.order.create({
     data: {
       number: 1,
@@ -260,7 +307,6 @@ async function main() {
             title: 'بروشور تعريفي',
             quantity: 200,
             specs: 'A4 مطوي 3 طيات، كوشيه 170 جرام، ألوان كاملة',
-            status: 'pending',
             position: 0,
           },
           {
@@ -268,7 +314,6 @@ async function main() {
             title: 'بانر واجهة المحل',
             quantity: 2,
             specs: 'فلكس 3×1 متر، طباعة عالية الدقة، بأعين معدنية',
-            status: 'pending',
             position: 0,
           },
         ],
@@ -340,7 +385,7 @@ async function main() {
 
 main()
   .then(async () => {
-    console.log('\n🎉 تم التجهيز. سجّل الدخول بـ  admin / admin123');
+    console.log('\n🎉 تم التجهيز.');
     await prisma.$disconnect();
   })
   .catch(async (e) => {

@@ -13,9 +13,14 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force",
     "db:use-sqlite": "node scripts/switch-db.mjs sqlite",
-    "db:use-postgres": "node scripts/switch-db.mjs postgresql"
+    "db:use-postgres": "node scripts/switch-db.mjs postgresql",
+    "start:railway": "prisma migrate deploy && tsx prisma/seed.ts && next start"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -32,10 +37,12 @@
     "jose": "^5.9.6",
     "lucide-react": "^0.468.0",
     "next": "14.2.35",
+    "prisma": "^5.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.4.1",
     "server-only": "^0.0.1",
+    "tsx": "^4.19.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -47,9 +54,7 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.35",
     "postcss": "^8.4.49",
-    "prisma": "^5.22.0",
     "tailwindcss": "^3.4.17",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }
