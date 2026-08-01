@@ -1,0 +1,253 @@
+// مخطط قاعدة بيانات نظام إدارة أوردرات المطبعة
+//
+// ملاحظة مهمة: هذا المخطط مكتوب ليعمل على SQLite (للتطوير المحلي) و PostgreSQL
+// (للنشر أونلاين) بدون أي تعديل. لذلك لا نستخدم enum ولا String[] لأنهما غير
+// مدعومين في SQLite. القوائم تُخزَّن كنص JSON، والقيم المحصورة تُخزَّن كنص
+// وتُضبط أنواعها في src/lib/stages.ts
+//
+// للتبديل بين المحركين:  npm run db:use-postgres   أو   npm run db:use-sqlite
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── الأدوار والصلاحيات ───────────────────────────
+
+model Role {
+  id          String  @id @default(cuid())
+  key         String  @unique // مفتاح ثابت بالإنجليزية
+  name        String // الاسم المعروض بالعربية
+  description String?
+
+  // دور الأدمن يتخطى كل الفحوصات، ولا يمكن حذف الأدوار النظامية
+  isAdmin  Boolean @default(false)
+  isSystem Boolean @default(false)
+
+  // قوائم مخزَّنة كنص JSON
+  permissions     String @default("[]") // مفاتيح الصلاحيات: orders.create ...
+  visibleStages   String @default("[]") // أعمدة اللوحة المسموح برؤيتها
+  productionTypes String @default("[]") // أنواع الإنتاج المسموح برؤيتها
+
+  users User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id           String  @id @default(cuid())
+  username     String  @unique
+  name         String
+  phone        String?
+  passwordHash String
+  isActive     Boolean @default(true)
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  createdOrders  Order[]      @relation("OrderCreatedBy")
+  assignedItems  OrderItem[]  @relation("ItemAssignee")
+  uploads        Attachment[]
+  comments       Comment[]
+  activities     ActivityLog[]
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([roleId])
+}
+
+// ────────────────────────────────── العملاء ──────────────────────────────────
+
+model Customer {
+  id      String  @id @default(cuid())
+  name    String
+  phone   String?
+  company String?
+  notes   String?
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+// ────────────────────────────────── الأوردرات ─────────────────────────────────
+
+model Order {
+  id     String @id @default(cuid())
+  number Int    @unique // الرقم التسلسلي، يبدأ من الرقم المحدد في الإعدادات
+
+  title       String
+  description String?
+
+  customerName String // نسخة ثابتة من اسم العميل وقت إنشاء الأوردر
+  customerId   String?
+  customer     Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // مرحلة الأوردر: orders | design | production | completed | review | invoice | delivered
+  stage    String @default("orders")
+  priority String @default("normal") // low | normal | high | urgent
+  position Int    @default(0)
+
+  dueDate     DateTime?
+  deliveredAt DateTime?
+
+  // الفاتورة وسند التسليم
+  invoiceNumber      String?
+  invoiceAmount      Float?
+  invoicePaid        Boolean @default(false)
+  deliveryNoteNumber String?
+  receiverName       String?
+
+  isArchived Boolean @default(false)
+
+  createdById String
+  createdBy   User   @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  items       OrderItem[]
+  attachments Attachment[]
+  comments    Comment[]
+  activities  ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stage])
+  @@index([customerId])
+  @@index([createdById])
+}
+
+// بند شغل داخل الأوردر — هذا هو الكارت الذي يتحرك في أعمدة الإنتاج.
+// الأوردر الواحد قد يحتوي على بند أوفست وبند ديجيتال، وكل عامل يرى بنده فقط.
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // نوع الإنتاج: digital | offset | indoor  (هو نفسه عمود اللوحة)
+  productionType String
+
+  title    String
+  quantity Int     @default(1)
+  specs    String? // المقاس، الورق، عدد الألوان، التشطيب ...
+  notes    String?
+
+  // حالة البند داخل عموده: pending | in_progress | done
+  status   String @default("pending")
+  position Int    @default(0)
+
+  assigneeId String?
+  assignee   User?   @relation("ItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  attachments Attachment[]
+  comments    Comment[]
+  activities  ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productionType, status])
+  @@index([assigneeId])
+}
+
+// ────────────────────────────── المرفقات والتعليقات ─────────────────────────────
+
+model Attachment {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // لو محدد، فالمرفق خاص ببند معيّن ولا يراه إلا من يرى نوع الإنتاج الخاص به
+  orderItemId String?
+  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  fileName     String // الاسم المخزَّن على القرص
+  originalName String // الاسم الأصلي كما رفعه المستخدم
+  mimeType     String
+  size         Int
+
+  uploadedById String
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([orderItemId])
+}
+
+model Comment {
+  id   String @id @default(cuid())
+  body String
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  orderItemId String?
+  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([orderItemId])
+}
+
+// ──────────────────────────────── سجل النشاط ────────────────────────────────
+
+model ActivityLog {
+  id     String @id @default(cuid())
+  action String // created | moved | updated | item_created | file_uploaded ...
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  orderItemId String?
+  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  fromStage String?
+  toStage   String?
+  details   String? // نص حر بالعربية يوضّح ما حدث
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+// ───────────────────────────────── الإعدادات ─────────────────────────────────
+
+// صف واحد فقط، معرّفه دائمًا "settings"
+model Settings {
+  id String @id @default("settings")
+
+  companyName    String  @default("مطبعة نجد")
+  companyPhone   String?
+  companyAddress String?
+  logoUrl        String?
+  currency       String  @default("ج.م")
+
+  // ترقيم الأوردرات
+  orderNumberPrefix String @default("")
+  orderNumberStart  Int    @default(1)
+  nextOrderNumber   Int    @default(1) // العدّاد الذي يُزاد ذريًا مع كل أوردر
+
+  updatedAt DateTime @updatedAt
+}

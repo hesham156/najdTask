@@ -1,0 +1,226 @@
+/**
+ * تعريف مراحل العمل وأعمدة اللوحة وأنواع الإنتاج.
+ *
+ * الفكرة الأساسية في النظام:
+ * الأوردر يتحرك ككارت واحد في أعمدة (الأوردرات ← التصميم)، وبعد التصميم
+ * "ينفتح" إلى بنود شغل (OrderItem) كل بند بنوع إنتاج مختلف، وكل بند يظهر
+ * ككارت مستقل في عموده (ديجيتال / أوفست / اندور). عامل الأوفست يرى بنود
+ * الأوفست فقط. ولما كل البنود تخلص، كارت الأوردر يظهر في عمود الاكتمال
+ * ويكمل رحلته (المراجعة ← الفاتورة وسند التسليم).
+ *
+ * لإضافة نوع إنتاج جديد (مثلًا "ليزر"): أضِف مفتاحه في PRODUCTION_TYPES
+ * وعمودًا مقابلًا في BOARD_COLUMNS. باقي النظام يتكيّف تلقائيًا.
+ */
+
+// ────────────────────────────── أنواع الإنتاج ──────────────────────────────
+
+export const PRODUCTION_TYPES = ['digital', 'offset', 'indoor'] as const;
+export type ProductionType = (typeof PRODUCTION_TYPES)[number];
+
+export const PRODUCTION_TYPE_LABELS: Record<ProductionType, string> = {
+  digital: 'ديجيتال',
+  offset: 'أوفست',
+  indoor: 'اندور',
+};
+
+export function isProductionType(value: string): value is ProductionType {
+  return (PRODUCTION_TYPES as readonly string[]).includes(value);
+}
+
+// ───────────────────────────── مراحل الأوردر ─────────────────────────────
+
+export const ORDER_STAGES = [
+  'orders',
+  'design',
+  'production',
+  'completed',
+  'review',
+  'invoice',
+  'delivered',
+] as const;
+export type OrderStage = (typeof ORDER_STAGES)[number];
+
+export const ORDER_STAGE_LABELS: Record<OrderStage, string> = {
+  orders: 'الأوردرات',
+  design: 'التصميم',
+  production: 'تحت الإنتاج',
+  completed: 'الاكتمال',
+  review: 'المراجعة',
+  invoice: 'الفاتورة وسند التسليم',
+  delivered: 'تم التسليم',
+};
+
+export function isOrderStage(value: string): value is OrderStage {
+  return (ORDER_STAGES as readonly string[]).includes(value);
+}
+
+// ──────────────────────────── أعمدة لوحة الكانبان ────────────────────────────
+
+export type BoardColumn = {
+  /** مفتاح العمود — هو نفسه معرّف منطقة الإفلات */
+  key: string;
+  label: string;
+  /** order = يعرض كروت أوردرات، item = يعرض كروت بنود شغل */
+  kind: 'order' | 'item';
+  /** للأعمدة من نوع order */
+  stage?: OrderStage;
+  /** للأعمدة من نوع item */
+  productionType?: ProductionType;
+  /** ألوان تمييز العمود */
+  accent: string;
+  headerBg: string;
+  hint?: string;
+};
+
+export const BOARD_COLUMNS: BoardColumn[] = [
+  {
+    key: 'orders',
+    label: 'الأوردرات',
+    kind: 'order',
+    stage: 'orders',
+    accent: 'bg-slate-500',
+    headerBg: 'bg-slate-50 text-slate-700 border-slate-200',
+    hint: 'أوردرات جديدة لم تبدأ بعد',
+  },
+  {
+    key: 'design',
+    label: 'التصميم',
+    kind: 'order',
+    stage: 'design',
+    accent: 'bg-violet-500',
+    headerBg: 'bg-violet-50 text-violet-700 border-violet-200',
+    hint: 'تحت التصميم — بعد الانتهاء يُرسَل للإنتاج',
+  },
+  {
+    key: 'digital',
+    label: 'الديجيتال',
+    kind: 'item',
+    productionType: 'digital',
+    accent: 'bg-cyan-500',
+    headerBg: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    hint: 'بنود الطباعة الديجيتال',
+  },
+  {
+    key: 'offset',
+    label: 'الأوفست',
+    kind: 'item',
+    productionType: 'offset',
+    accent: 'bg-amber-500',
+    headerBg: 'bg-amber-50 text-amber-700 border-amber-200',
+    hint: 'بنود طباعة الأوفست',
+  },
+  {
+    key: 'indoor',
+    label: 'الاندور',
+    kind: 'item',
+    productionType: 'indoor',
+    accent: 'bg-emerald-500',
+    headerBg: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    hint: 'بنود طباعة الاندور',
+  },
+  {
+    key: 'completed',
+    label: 'الاكتمال',
+    kind: 'order',
+    stage: 'completed',
+    accent: 'bg-teal-600',
+    headerBg: 'bg-teal-50 text-teal-700 border-teal-200',
+    hint: 'أوردرات اكتملت كل بنودها',
+  },
+  {
+    key: 'review',
+    label: 'المراجعة',
+    kind: 'order',
+    stage: 'review',
+    accent: 'bg-orange-500',
+    headerBg: 'bg-orange-50 text-orange-700 border-orange-200',
+    hint: 'مراجعة الجودة قبل الفوترة',
+  },
+  {
+    key: 'invoice',
+    label: 'الفاتورة وسند التسليم',
+    kind: 'order',
+    stage: 'invoice',
+    accent: 'bg-rose-500',
+    headerBg: 'bg-rose-50 text-rose-700 border-rose-200',
+    hint: 'إصدار الفاتورة وتسليم العميل',
+  },
+];
+
+export const BOARD_COLUMN_KEYS = BOARD_COLUMNS.map((c) => c.key);
+
+export function getColumn(key: string): BoardColumn | undefined {
+  return BOARD_COLUMNS.find((c) => c.key === key);
+}
+
+/** العمود الذي يعرض أوردرات هذه المرحلة (لو كان لها عمود ظاهر) */
+export function columnForStage(stage: string): BoardColumn | undefined {
+  return BOARD_COLUMNS.find((c) => c.kind === 'order' && c.stage === stage);
+}
+
+// ─────────────────────────── الانتقالات المسموح بها ───────────────────────────
+
+/**
+ * من أي مرحلة إلى أي مرحلة يُسمح بنقل كارت الأوردر.
+ * ملاحظة: الانتقال من production إلى completed لا يتم بالسحب، بل تلقائيًا
+ * عندما تنتهي كل بنود الأوردر.
+ */
+export const ALLOWED_ORDER_TRANSITIONS: Record<OrderStage, OrderStage[]> = {
+  orders: ['design', 'production'],
+  design: ['orders', 'production'],
+  production: ['design'],
+  completed: ['review', 'production'],
+  review: ['completed', 'invoice', 'design'],
+  invoice: ['review', 'delivered'],
+  delivered: ['invoice'],
+};
+
+export function canTransition(from: string, to: string): boolean {
+  if (!isOrderStage(from) || !isOrderStage(to)) return false;
+  if (from === to) return true;
+  return ALLOWED_ORDER_TRANSITIONS[from].includes(to);
+}
+
+// ───────────────────────────── حالات بنود الشغل ─────────────────────────────
+
+export const ITEM_STATUSES = ['pending', 'in_progress', 'done'] as const;
+export type ItemStatus = (typeof ITEM_STATUSES)[number];
+
+export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
+  pending: 'في الانتظار',
+  in_progress: 'جاري التنفيذ',
+  done: 'تم',
+};
+
+export const ITEM_STATUS_STYLES: Record<ItemStatus, string> = {
+  pending: 'bg-slate-100 text-slate-600 border-slate-200',
+  in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+  done: 'bg-green-50 text-green-700 border-green-200',
+};
+
+export function isItemStatus(value: string): value is ItemStatus {
+  return (ITEM_STATUSES as readonly string[]).includes(value);
+}
+
+// ──────────────────────────────── الأولويات ────────────────────────────────
+
+export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  low: 'منخفضة',
+  normal: 'عادية',
+  high: 'مرتفعة',
+  urgent: 'عاجل',
+};
+
+export const PRIORITY_STYLES: Record<Priority, string> = {
+  low: 'bg-slate-100 text-slate-600 border-slate-200',
+  normal: 'bg-sky-50 text-sky-700 border-sky-200',
+  high: 'bg-amber-50 text-amber-700 border-amber-200',
+  urgent: 'bg-red-50 text-red-700 border-red-200',
+};
+
+export function isPriority(value: string): value is Priority {
+  return (PRIORITIES as readonly string[]).includes(value);
+}

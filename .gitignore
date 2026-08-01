@@ -1,0 +1,26 @@
+node_modules
+.next
+out
+build
+.DS_Store
+*.pem
+
+# البيئة
+.env
+.env*.local
+
+# قاعدة البيانات المحلية
+prisma/*.db
+prisma/*.db-journal
+prisma/dev.db*
+
+# المرفقات المرفوعة
+uploads/*
+!uploads/.gitkeep
+
+# سجلات
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+next-env.d.ts
