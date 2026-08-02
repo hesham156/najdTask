@@ -146,6 +146,11 @@ model OrderItem {
   // productionType وتُعرَّف في src/lib/stages.ts
   options String @default("[]")
 
+  // ما استهلكه عامل الإنتاج فعليًا: شيتات للطباعة الورقية وأمتار للاندور.
+  // الوحدة تُخزَّن مع الرقم حتى يبقى السجل صحيحًا لو تحوّل البند لنوع آخر.
+  consumedQty  Float?
+  consumedUnit String? // sheet | meter
+
   // حالة البند داخل عموده: pending | in_progress | done
   status   String @default("pending")
   position Int    @default(0)

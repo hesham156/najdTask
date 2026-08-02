@@ -109,6 +109,8 @@ export const GET = route(async () => {
     quantity: item.quantity,
     specs: item.specs,
     options: parseList(item.options),
+    consumedQty: item.consumedQty,
+    consumedUnit: item.consumedUnit,
     position: item.position,
     assignee: item.assignee,
     attachmentsCount: item._count.attachments,

@@ -27,6 +27,57 @@ export function isProductionType(value: string): value is ProductionType {
   return (PRODUCTION_TYPES as readonly string[]).includes(value);
 }
 
+// ─────────────────────── وحدة الاستهلاك حسب نوع الإنتاج ───────────────────────
+
+/**
+ * ما الذي يسجّله عامل الإنتاج بعد تنفيذ البند: الطباعة الورقية تُحسب بالشيتات
+ * والاندور بالأمتار. الوحدة مشتقّة من نوع الإنتاج فلا يختار العامل شيئًا.
+ */
+export type ConsumptionUnit = {
+  /** يُخزَّن مع الرقم حتى يبقى صحيحًا لو تحوّل البند لنوع آخر لاحقًا */
+  key: 'sheet' | 'meter';
+  /** تسمية الحقل في النموذج */
+  label: string;
+  /** لاحقة مختصرة تظهر بجانب الرقم */
+  short: string;
+  /** الأمتار تقبل الكسور، والشيتات لا */
+  step: number;
+};
+
+const SHEETS: ConsumptionUnit = {
+  key: 'sheet',
+  label: 'عدد الشيتات المستخدمة',
+  short: 'شيت',
+  step: 1,
+};
+
+const METERS: ConsumptionUnit = {
+  key: 'meter',
+  label: 'عدد الأمتار المستخدمة',
+  short: 'متر',
+  step: 0.5,
+};
+
+export const CONSUMPTION_UNITS: Record<ProductionType, ConsumptionUnit> = {
+  digital: SHEETS,
+  offset: SHEETS,
+  indoor: METERS,
+};
+
+export function consumptionUnitFor(productionType: string): ConsumptionUnit {
+  return CONSUMPTION_UNITS[productionType as ProductionType] ?? SHEETS;
+}
+
+/**
+ * لاحقة العرض. نفضّل الوحدة المخزَّنة وقت الإدخال على المشتقّة من النوع
+ * الحالي: بند سُجِّل بالأمتار ثم تحوّل لأوفست يجب أن يظل مكتوبًا "متر".
+ */
+export function consumptionShortLabel(productionType: string, storedUnit?: string | null): string {
+  if (storedUnit === 'meter') return METERS.short;
+  if (storedUnit === 'sheet') return SHEETS.short;
+  return consumptionUnitFor(productionType).short;
+}
+
 // ─────────────────────── خيارات البند حسب نوع الإنتاج ───────────────────────
 
 /**

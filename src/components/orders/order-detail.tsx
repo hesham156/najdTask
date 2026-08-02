@@ -31,6 +31,7 @@ import {
   PRIORITY_STYLES,
   PRODUCTION_TYPES,
   PRODUCTION_TYPE_LABELS,
+  consumptionShortLabel,
   itemOptionLabels,
   sanitizeItemOptions,
   type ItemStatus,
@@ -53,6 +54,8 @@ type DetailItem = {
   specs: string | null;
   notes: string | null;
   options: string[];
+  consumedQty: number | null;
+  consumedUnit: string | null;
   status: ItemStatus;
   assignee: Person | null;
   completedAt: string | null;
@@ -406,6 +409,12 @@ function ItemRow({
             <span className="num me-1 ms-2 text-xs font-normal text-slate-500">
               ×{item.quantity}
             </span>
+            {item.consumedQty !== null ? (
+              <span className="ms-2 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
+                استهلك <span className="num">{item.consumedQty}</span>{' '}
+                {consumptionShortLabel(item.productionType, item.consumedUnit)}
+              </span>
+            ) : null}
           </p>
 
           {item.specs ? (

@@ -1,6 +1,7 @@
 'use client';
 
-import { CalendarClock, Check, CircleDot, Paperclip, Play, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CalendarClock, Check, CircleDot, Gauge, Paperclip, Play, User } from 'lucide-react';
 
 import { cn, dueState, formatDate } from '@/lib/utils';
 import {
@@ -9,6 +10,8 @@ import {
   PRIORITY_LABELS,
   PRIORITY_STYLES,
   PRODUCTION_TYPE_LABELS,
+  consumptionShortLabel,
+  consumptionUnitFor,
   itemOptionLabels,
   type ItemStatus,
 } from '@/lib/stages';
@@ -22,6 +25,7 @@ export function ItemCardBody({
   action,
   canChangeStatus,
   onStatusChange,
+  onConsumedChange,
   busy,
 }: {
   card: ItemCardType;
@@ -33,6 +37,8 @@ export function ItemCardBody({
   action?: React.ReactNode;
   canChangeStatus: boolean;
   onStatusChange?: (status: ItemStatus) => void;
+  /** تسجيل الاستهلاك — نفس صلاحية بدء البند وإنهائه */
+  onConsumedChange?: (value: number | null) => void;
   busy?: boolean;
 }) {
   const due = dueState(card.order.dueDate);
@@ -126,6 +132,18 @@ export function ItemCardBody({
         ) : null}
       </div>
 
+      {canChangeStatus && onConsumedChange ? (
+        <div className="mt-2" onPointerDown={stop} onClick={(e) => e.stopPropagation()}>
+          <ConsumedInput
+            productionType={card.productionType}
+            value={card.consumedQty}
+            storedUnit={card.consumedUnit}
+            disabled={busy}
+            onSave={onConsumedChange}
+          />
+        </div>
+      ) : null}
+
       {canChangeStatus && onStatusChange ? (
         <div
           className="mt-2.5 flex gap-1.5 border-t border-slate-100 pt-2"
@@ -172,5 +190,80 @@ export function ItemCardBody({
 
       <span className="sr-only">نوع الشغل: {PRODUCTION_TYPE_LABELS[card.productionType]}</span>
     </article>
+  );
+}
+
+/**
+ * حقل تسجيل الاستهلاك: شيتات للطباعة الورقية وأمتار للاندور.
+ *
+ * الحفظ عند مغادرة الحقل أو الضغط على Enter — لا مع كل ضغطة مفتاح، وإلا
+ * أرسلنا طلبًا لكل رقم يكتبه العامل. ونحفظ فقط إن تغيّرت القيمة فعلًا.
+ */
+function ConsumedInput({
+  productionType,
+  value,
+  storedUnit,
+  disabled,
+  onSave,
+}: {
+  productionType: string;
+  value: number | null;
+  storedUnit: string | null;
+  disabled?: boolean;
+  onSave: (value: number | null) => void;
+}) {
+  const unit = consumptionUnitFor(productionType);
+  const suffix = consumptionShortLabel(productionType, storedUnit);
+  const [draft, setDraft] = useState(value === null ? '' : String(value));
+
+  // لو تغيّرت القيمة من الخادم (تحديث اللوحة) نزامن الحقل ما لم يكن قيد التحرير
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setDraft(value === null ? '' : String(value));
+  }, [value, editing]);
+
+  function commit() {
+    setEditing(false);
+    const trimmed = draft.trim();
+    const next = trimmed === '' ? null : Number(trimmed);
+
+    if (next !== null && (Number.isNaN(next) || next < 0)) {
+      setDraft(value === null ? '' : String(value));
+      return;
+    }
+    if (next === value) return;
+    onSave(next);
+  }
+
+  return (
+    <label className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1">
+      <Gauge className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step={unit.step}
+        value={draft}
+        disabled={disabled}
+        placeholder="—"
+        aria-label={unit.label}
+        onFocus={() => setEditing(true)}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+          if (event.key === 'Escape') {
+            setDraft(value === null ? '' : String(value));
+            setEditing(false);
+            event.currentTarget.blur();
+          }
+        }}
+        className="num w-full min-w-0 bg-transparent text-[11px] font-semibold text-slate-700 outline-none placeholder:font-normal placeholder:text-slate-400 disabled:opacity-50"
+      />
+      <span className="shrink-0 text-[10px] text-slate-500">{suffix}</span>
+    </label>
   );
 }

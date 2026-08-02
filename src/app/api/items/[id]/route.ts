@@ -14,6 +14,8 @@ import {
   ITEM_STATUS_LABELS,
   PRODUCTION_TYPES,
   PRODUCTION_TYPE_LABELS,
+  consumptionShortLabel,
+  consumptionUnitFor,
   sanitizeItemOptions,
 } from '@/lib/stages';
 import { parseList, serializeList } from '@/lib/serialize';
@@ -33,6 +35,8 @@ const updateSchema = z.object({
   assigneeId: z.string().trim().nullable().optional(),
   productionType: z.enum(PRODUCTION_TYPES).optional(),
   options: z.array(z.string().trim()).max(50).optional(),
+  // الاستهلاك الفعلي: null يمسح القيمة المسجّلة
+  consumedQty: z.coerce.number().min(0).max(1_000_000).nullable().optional(),
 });
 
 export const PATCH = route(async (request: Request, { params }: Params) => {
@@ -49,7 +53,11 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
     body.productionType !== undefined && body.productionType !== item.productionType;
   const changingFields = ['title', 'quantity', 'specs', 'notes', 'options'].some((k) => k in body);
 
+  // تسجيل الاستهلاك جزء من تنفيذ الشغل، فيكفيه ما يكفي بدء البند وإنهاءه
+  const changingConsumed = body.consumedQty !== undefined;
+
   if (changingStatus && !can(user, 'items.move')) throw forbidden('تغيير حالة البند');
+  if (changingConsumed && !can(user, 'items.move')) throw forbidden('تسجيل الاستهلاك');
   if (changingAssignee && !can(user, 'items.assign')) throw forbidden('إسناد البند');
   if ((changingFields || changingType) && !can(user, 'items.edit')) {
     throw forbidden('تعديل بنود الشغل');
@@ -72,6 +80,15 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
     where: { id: item.id },
     data: {
       ...(nextOptions !== undefined ? { options: serializeList(nextOptions) } : {}),
+      ...(changingConsumed
+        ? body.consumedQty === null
+          ? { consumedQty: null, consumedUnit: null }
+          : {
+              consumedQty: body.consumedQty,
+              // نلتقط الوحدة وقت الإدخال حتى لا يغيّر تحويلُ النوع لاحقًا معنى الرقم
+              consumedUnit: consumptionUnitFor(effectiveType).key,
+            }
+        : {}),
       ...(body.title !== undefined ? { title: body.title } : {}),
       ...(body.quantity !== undefined ? { quantity: body.quantity } : {}),
       ...(body.specs !== undefined ? { specs: body.specs } : {}),
@@ -105,6 +122,18 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
       userId: user.id,
       action: 'item_type',
       details: `حوّل "${item.title}" من ${PRODUCTION_TYPE_LABELS[item.productionType as never]} إلى ${PRODUCTION_TYPE_LABELS[body.productionType!]}`,
+    });
+  } else if (changingConsumed) {
+    const unit = consumptionShortLabel(effectiveType, updated.consumedUnit);
+    await logActivity({
+      orderId: item.orderId,
+      orderItemId: item.id,
+      userId: user.id,
+      action: 'item_consumption',
+      details:
+        body.consumedQty === null
+          ? `مسح استهلاك بند "${item.title}"`
+          : `سجّل استهلاك بند "${item.title}": ${body.consumedQty} ${unit}`,
     });
   } else {
     await logActivity({

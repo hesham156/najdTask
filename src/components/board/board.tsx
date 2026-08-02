@@ -141,6 +141,18 @@ export function Board() {
     },
   });
 
+  const consumedMutation = useMutation({
+    mutationFn: ({ id, consumedQty }: { id: string; consumedQty: number | null }) =>
+      apiPatch(`/api/items/${id}`, { consumedQty }),
+    onError: (error: Error) => {
+      toast.error(error.message);
+      queryClient.invalidateQueries({ queryKey: ['board'] });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['board'] });
+    },
+  });
+
   function handleDragStart(event: DragStartEvent) {
     const id = String(event.active.id);
     const columnKey = findColumnKey(id, columnsRef.current);
@@ -322,6 +334,9 @@ export function Board() {
               canMove={(card) => moveTargets(card, columns, can).length > 0}
               canChangeStatus={can('items.move')}
               onStatusChange={(id, status) => statusMutation.mutate({ id, status })}
+              onConsumedChange={(id, consumedQty) =>
+                consumedMutation.mutate({ id, consumedQty })
+              }
               busy={statusMutation.isPending}
             />
           ))}
@@ -365,6 +380,7 @@ function BoardColumn({
   canMove,
   canChangeStatus,
   onStatusChange,
+  onConsumedChange,
   busy,
 }: {
   column: BoardColumnData;
@@ -374,6 +390,7 @@ function BoardColumn({
   canMove: (card: BoardCard) => boolean;
   canChangeStatus: boolean;
   onStatusChange: (id: string, status: ItemStatus) => void;
+  onConsumedChange: (id: string, value: number | null) => void;
   busy: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.key });
@@ -451,6 +468,7 @@ function BoardColumn({
                         action={action}
                         canChangeStatus={canChangeStatus}
                         onStatusChange={(status) => onStatusChange(card.id, status)}
+                        onConsumedChange={(value) => onConsumedChange(card.id, value)}
                         busy={busy}
                       />
                     )}

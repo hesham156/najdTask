@@ -44,6 +44,9 @@ export type ItemCard = {
   specs: string | null;
   /** مفاتيح الخيارات المختارة — تُترجَم بـ itemOptionLabels في lib/stages */
   options: string[];
+  /** ما استهلكه عامل الإنتاج فعليًا، ووحدته وقت الإدخال (sheet | meter) */
+  consumedQty: number | null;
+  consumedUnit: string | null;
   position: number;
   assignee: UserBadge | null;
   attachmentsCount: number;
