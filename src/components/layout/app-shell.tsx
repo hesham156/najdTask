@@ -70,7 +70,11 @@ export function AppShell({
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-surface">
+    // contain:paint يجعل هذه القشرة الكتلةَ الحاوية للقائمة الجانبية الثابتة،
+    // فيقصّها overflow-hidden أعلاه بدل أن تقف خارج الشاشة وتجعل المستند
+    // قابلًا للتمرير أفقيًا على الموبايل. القشرة بمقاس الشاشة، فلا شيء مشروع
+    // يُرسَم خارجها (التنبيهات تُنقَل إلى body خارج هذه القشرة).
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-surface [contain:paint]">
       {/* الشريط العلوي */}
       <header className="z-30 flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 sm:px-4">
         <button
@@ -129,7 +133,9 @@ export function AppShell({
         <aside
           className={cn(
             'fixed inset-y-14 z-20 w-60 shrink-0 overflow-y-auto border-e border-slate-200 bg-white p-3 transition-transform lg:static lg:inset-auto lg:translate-x-0',
-            menuOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0',
+            menuOpen
+              ? 'translate-x-0'
+              : 'pointer-events-none translate-x-full lg:pointer-events-auto lg:translate-x-0',
           )}
           style={{ insetInlineStart: 0 }}
         >
