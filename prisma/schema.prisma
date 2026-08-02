@@ -141,6 +141,10 @@ model OrderItem {
   specs    String? // المقاس، الورق، عدد الألوان، التشطيب ...
   notes    String?
 
+  // خيارات البند (اختيار متعدد) كنص JSON — القائمة المتاحة تعتمد على
+  // productionType وتُعرَّف في src/lib/stages.ts
+  options String @default("[]")
+
   // حالة البند داخل عموده: pending | in_progress | done
   status   String @default("pending")
   position Int    @default(0)

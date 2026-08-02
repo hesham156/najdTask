@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { ok, requireUser, route, forbidden } from '@/lib/api';
 import { allowedProductionTypes, can, visibleColumns } from '@/lib/permissions';
 import { getSettings } from '@/lib/orders';
+import { parseList } from '@/lib/serialize';
 import type { ItemStatus, Priority, ProductionType } from '@/lib/stages';
 import type { BoardColumnData, BoardData, ItemCard, OrderCard } from '@/types/board';
 
@@ -107,6 +108,7 @@ export const GET = route(async () => {
     status: item.status as ItemStatus,
     quantity: item.quantity,
     specs: item.specs,
+    options: parseList(item.options),
     position: item.position,
     assignee: item.assignee,
     attachmentsCount: item._count.attachments,

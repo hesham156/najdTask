@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Check, Loader2, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -73,6 +73,70 @@ export function Field({
       {children}
       {hint && !error ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
       {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+// ──────────────────────────── اختيار متعدد بمربّعات ────────────────────────────
+
+/**
+ * قائمة خيارات باختيار متعدد — تُستخدم لخيارات بند الشغل التي تختلف حسب نوع
+ * الإنتاج. مربّعات ظاهرة بدل قائمة منسدلة لأن المطلوب رؤية كل الخيارات ولمسها
+ * بسهولة على الموبايل.
+ */
+export function OptionPicker({
+  options,
+  selected,
+  onChange,
+  disabled,
+  emptyLabel = 'لا توجد خيارات لهذا النوع',
+}: {
+  options: { key: string; label: string }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  disabled?: boolean;
+  emptyLabel?: string;
+}) {
+  if (options.length === 0) {
+    return <p className="text-xs text-slate-400">{emptyLabel}</p>;
+  }
+
+  const toggle = (key: string) => {
+    onChange(selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key]);
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((option) => {
+        const active = selected.includes(option.key);
+        return (
+          <button
+            key={option.key}
+            type="button"
+            disabled={disabled}
+            onClick={() => toggle(option.key)}
+            aria-pressed={active}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              active
+                ? 'border-brand-400 bg-brand-50 text-brand-700'
+                : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50',
+            )}
+          >
+            <span
+              className={cn(
+                'grid h-3.5 w-3.5 shrink-0 place-items-center rounded border',
+                active ? 'border-brand-500 bg-brand-600' : 'border-slate-300 bg-white',
+              )}
+              aria-hidden
+            >
+              {active ? <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} /> : null}
+            </span>
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

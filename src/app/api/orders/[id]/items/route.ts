@@ -4,7 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { forbidden, ok, requireUser, route } from '@/lib/api';
 import { can } from '@/lib/permissions';
 import { assertCanTouchProductionType, findOrderOrThrow, logActivity, syncOrderStageWithItems } from '@/lib/orders';
-import { PRODUCTION_TYPES, PRODUCTION_TYPE_LABELS } from '@/lib/stages';
+import { PRODUCTION_TYPES, PRODUCTION_TYPE_LABELS, sanitizeItemOptions } from '@/lib/stages';
+import { serializeList } from '@/lib/serialize';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ const schema = z.object({
   specs: z.string().trim().max(2000).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
   assigneeId: z.string().trim().optional().nullable(),
+  options: z.array(z.string().trim()).max(50).optional(),
 });
 
 /** إضافة بند شغل جديد إلى أوردر قائم. */
@@ -43,6 +45,7 @@ export const POST = route(async (request: Request, { params }: { params: { id: s
       quantity: body.quantity,
       specs: body.specs || null,
       notes: body.notes || null,
+      options: serializeList(sanitizeItemOptions(body.productionType, body.options ?? [])),
       assigneeId: body.assigneeId || null,
       position: (last?.position ?? -1) + 1,
     },

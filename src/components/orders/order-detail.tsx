@@ -22,6 +22,7 @@ import toast from 'react-hot-toast';
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/client';
 import { cn, formatBytes, formatDate, formatDateTime, timeAgo } from '@/lib/utils';
 import {
+  ITEM_OPTIONS,
   ITEM_STATUS_LABELS,
   ITEM_STATUS_STYLES,
   ORDER_STAGE_LABELS,
@@ -30,13 +31,15 @@ import {
   PRIORITY_STYLES,
   PRODUCTION_TYPES,
   PRODUCTION_TYPE_LABELS,
+  itemOptionLabels,
+  sanitizeItemOptions,
   type ItemStatus,
   type OrderStage,
   type Priority,
   type ProductionType,
 } from '@/lib/stages';
 import { usePermissions } from '@/components/session';
-import { ConfirmDialog, Field, PageLoader, Spinner } from '@/components/ui';
+import { ConfirmDialog, Field, OptionPicker, PageLoader, Spinner } from '@/components/ui';
 
 // ────────────────────────────────── الأنواع ──────────────────────────────────
 
@@ -49,6 +52,7 @@ type DetailItem = {
   quantity: number;
   specs: string | null;
   notes: string | null;
+  options: string[];
   status: ItemStatus;
   assignee: Person | null;
   completedAt: string | null;
@@ -407,6 +411,19 @@ function ItemRow({
           {item.specs ? (
             <p className="mt-1 text-xs leading-relaxed text-slate-600">{item.specs}</p>
           ) : null}
+
+          {itemOptionLabels(item.productionType, item.options).length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {itemOptionLabels(item.productionType, item.options).map((label) => (
+                <span
+                  key={label}
+                  className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
@@ -593,6 +610,7 @@ function AddItemForm({ orderId, onAdded }: { orderId: string; onAdded: () => voi
   const [title, setTitle] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [specs, setSpecs] = useState('');
+  const [options, setOptions] = useState<string[]>([]);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -601,12 +619,14 @@ function AddItemForm({ orderId, onAdded }: { orderId: string; onAdded: () => voi
         title: title.trim(),
         quantity,
         specs: specs.trim() || null,
+        options,
       }),
     onSuccess: () => {
       toast.success('تمت إضافة البند');
       setTitle('');
       setQuantity(1);
       setSpecs('');
+      setOptions([]);
       setOpen(false);
       onAdded();
     },
@@ -637,7 +657,11 @@ function AddItemForm({ orderId, onAdded }: { orderId: string; onAdded: () => voi
         <select
           className="input !py-1.5 text-xs"
           value={productionType}
-          onChange={(e) => setProductionType(e.target.value as ProductionType)}
+          onChange={(e) => {
+            const next = e.target.value as ProductionType;
+            setProductionType(next);
+            setOptions((prev) => sanitizeItemOptions(next, prev));
+          }}
           aria-label="نوع الشغل"
         >
           {types.map((type) => (
@@ -670,6 +694,18 @@ function AddItemForm({ orderId, onAdded }: { orderId: string; onAdded: () => voi
         onChange={(e) => setSpecs(e.target.value)}
         aria-label="المواصفات"
       />
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-medium text-slate-500">
+          خيارات {PRODUCTION_TYPE_LABELS[productionType]}
+        </p>
+        <OptionPicker
+          options={ITEM_OPTIONS[productionType] ?? []}
+          selected={options}
+          onChange={setOptions}
+          disabled={mutation.isPending}
+        />
+      </div>
 
       <div className="flex gap-2">
         <button type="submit" className="btn-primary !py-1.5 !text-xs" disabled={mutation.isPending}>

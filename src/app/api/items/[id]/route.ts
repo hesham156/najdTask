@@ -9,7 +9,14 @@ import {
   logActivity,
   syncOrderStageWithItems,
 } from '@/lib/orders';
-import { ITEM_STATUSES, ITEM_STATUS_LABELS, PRODUCTION_TYPES, PRODUCTION_TYPE_LABELS } from '@/lib/stages';
+import {
+  ITEM_STATUSES,
+  ITEM_STATUS_LABELS,
+  PRODUCTION_TYPES,
+  PRODUCTION_TYPE_LABELS,
+  sanitizeItemOptions,
+} from '@/lib/stages';
+import { parseList, serializeList } from '@/lib/serialize';
 import { deleteStoredFile } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +31,7 @@ const updateSchema = z.object({
   status: z.enum(ITEM_STATUSES).optional(),
   assigneeId: z.string().trim().nullable().optional(),
   productionType: z.enum(PRODUCTION_TYPES).optional(),
+  options: z.array(z.string().trim()).max(50).optional(),
 });
 
 export const PATCH = route(async (request: Request, { params }: Params) => {
@@ -38,7 +46,7 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
   const changingAssignee = body.assigneeId !== undefined && body.assigneeId !== item.assigneeId;
   const changingType =
     body.productionType !== undefined && body.productionType !== item.productionType;
-  const changingFields = ['title', 'quantity', 'specs', 'notes'].some((k) => k in body);
+  const changingFields = ['title', 'quantity', 'specs', 'notes', 'options'].some((k) => k in body);
 
   if (changingStatus && !can(user, 'items.move')) throw forbidden('تغيير حالة البند');
   if (changingAssignee && !can(user, 'items.assign')) throw forbidden('إسناد البند');
@@ -49,9 +57,20 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
     throw forbidden(`تحويل البند إلى ${PRODUCTION_TYPE_LABELS[body.productionType!]}`);
   }
 
+  // الخيارات مرتبطة بنوع الإنتاج، فنصفّيها دائمًا على النوع الجديد: تحويل بند
+  // من ديجيتال إلى اندور يُسقط خيارات التشطيب التي لم تعد تنطبق عليه.
+  const effectiveType = body.productionType ?? item.productionType;
+  const nextOptions =
+    body.options !== undefined
+      ? sanitizeItemOptions(effectiveType, body.options)
+      : changingType
+        ? sanitizeItemOptions(effectiveType, parseList(item.options))
+        : undefined;
+
   const updated = await prisma.orderItem.update({
     where: { id: item.id },
     data: {
+      ...(nextOptions !== undefined ? { options: serializeList(nextOptions) } : {}),
       ...(body.title !== undefined ? { title: body.title } : {}),
       ...(body.quantity !== undefined ? { quantity: body.quantity } : {}),
       ...(body.specs !== undefined ? { specs: body.specs } : {}),

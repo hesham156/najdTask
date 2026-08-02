@@ -9,6 +9,7 @@ import {
   PRIORITY_LABELS,
   PRIORITY_STYLES,
   PRODUCTION_TYPE_LABELS,
+  itemOptionLabels,
   type ItemStatus,
 } from '@/lib/stages';
 import type { ItemCard as ItemCardType } from '@/types/board';
@@ -36,6 +37,7 @@ export function ItemCardBody({
 }) {
   const due = dueState(card.order.dueDate);
   const done = card.status === 'done';
+  const optionLabels = itemOptionLabels(card.productionType, card.options);
 
   // الأزرار لا يجب أن تبدأ سحبًا عند الضغط عليها
   const stop = (event: React.PointerEvent) => event.stopPropagation();
@@ -76,6 +78,19 @@ export function ItemCardBody({
         <p className="mt-1.5 line-clamp-2 rounded-md bg-slate-50 px-2 py-1 text-[11px] leading-relaxed text-slate-600">
           {card.specs}
         </p>
+      ) : null}
+
+      {optionLabels.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {optionLabels.map((label) => (
+            <span
+              key={label}
+              className="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
       ) : null}
 
       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">

@@ -4,7 +4,8 @@ import { insensitive, prisma } from '@/lib/prisma';
 import { forbidden, ok, requireUser, route } from '@/lib/api';
 import { allowedProductionTypes, can } from '@/lib/permissions';
 import { allocateOrderNumber, getSettings, logActivity } from '@/lib/orders';
-import { PRIORITIES, PRODUCTION_TYPES, isOrderStage } from '@/lib/stages';
+import { PRIORITIES, PRODUCTION_TYPES, isOrderStage, sanitizeItemOptions } from '@/lib/stages';
+import { serializeList } from '@/lib/serialize';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +80,7 @@ const itemSchema = z.object({
   quantity: z.coerce.number().int().min(1, 'الكمية لا تقل عن 1').default(1),
   specs: z.string().trim().max(2000).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
+  options: z.array(z.string().trim()).max(50).optional(),
 });
 
 const createSchema = z.object({
@@ -139,6 +141,7 @@ export const POST = route(async (request: Request) => {
             quantity: item.quantity,
             specs: item.specs || null,
             notes: item.notes || null,
+            options: serializeList(sanitizeItemOptions(item.productionType, item.options ?? [])),
             position: index,
           })),
         },

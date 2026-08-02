@@ -27,6 +27,59 @@ export function isProductionType(value: string): value is ProductionType {
   return (PRODUCTION_TYPES as readonly string[]).includes(value);
 }
 
+// ─────────────────────── خيارات البند حسب نوع الإنتاج ───────────────────────
+
+/**
+ * خيارات إضافية يختار منها المستخدم ما شاء لكل بند شغل (اختيار متعدد).
+ * الديجيتال والأوفست يشتركان في خيارات التشطيب، والاندور له قائمة ماكيناته.
+ *
+ * لإضافة خيار جديد: أضِف سطرًا في القائمة المناسبة. المفتاح هو ما يُخزَّن في
+ * قاعدة البيانات فلا تغيّره بعد الاستخدام، والتسمية هي ما يظهر في الواجهة.
+ */
+export type ItemOption = { key: string; label: string };
+
+const FINISHING_OPTIONS: ItemOption[] = [
+  { key: 'box', label: 'Box' },
+  { key: 'cello_gloss', label: 'سلفان لميع' },
+  { key: 'cello_matte', label: 'سلفان مطفي' },
+  { key: 'creasing', label: 'تكسير' },
+];
+
+const INDOOR_OPTIONS: ItemOption[] = [
+  { key: 'dtf', label: 'DTF' },
+  { key: 'uv_dtf', label: 'UV-DTF' },
+  { key: 'sublimation', label: 'Sublimation' },
+  { key: 'orajet_lamination', label: 'Orajet Lamination' },
+  { key: 'witcolor_200', label: 'Wit-Color 200' },
+  { key: 'cutplotter_130ar', label: '130AR Cutplotter' },
+  { key: 'gz_uv', label: 'GZ UV' },
+  { key: 'roland', label: 'Roland' },
+  { key: 'book_lamination', label: 'Book Lamination' },
+  { key: 'gz_320', label: 'GZ 320' },
+  { key: 'epson', label: 'Epson' },
+  { key: 'lamination', label: 'Lamination' },
+];
+
+export const ITEM_OPTIONS: Record<ProductionType, ItemOption[]> = {
+  digital: FINISHING_OPTIONS,
+  offset: FINISHING_OPTIONS,
+  indoor: INDOOR_OPTIONS,
+};
+
+/** تسميات الخيارات المختارة، متجاهلةً أي مفتاح لم يعد موجودًا في القائمة. */
+export function itemOptionLabels(productionType: string, keys: string[]): string[] {
+  const available = ITEM_OPTIONS[productionType as ProductionType] ?? [];
+  return keys
+    .map((key) => available.find((option) => option.key === key)?.label)
+    .filter((label): label is string => Boolean(label));
+}
+
+/** يُبقي فقط المفاتيح الصالحة لهذا النوع — الواجهة قد ترسل خيارات نوع آخر بعد التبديل. */
+export function sanitizeItemOptions(productionType: string, keys: string[]): string[] {
+  const available = ITEM_OPTIONS[productionType as ProductionType] ?? [];
+  return available.filter((option) => keys.includes(option.key)).map((option) => option.key);
+}
+
 // ───────────────────────────── مراحل الأوردر ─────────────────────────────
 
 export const ORDER_STAGES = [

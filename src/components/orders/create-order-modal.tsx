@@ -8,15 +8,17 @@ import toast from 'react-hot-toast';
 import { apiGet, apiPost } from '@/lib/client';
 import { cn, formatBytes } from '@/lib/utils';
 import {
+  ITEM_OPTIONS,
   PRIORITIES,
   PRIORITY_LABELS,
   PRODUCTION_TYPES,
   PRODUCTION_TYPE_LABELS,
+  sanitizeItemOptions,
   type Priority,
   type ProductionType,
 } from '@/lib/stages';
 import { usePermissions } from '@/components/session';
-import { Field, Modal, Spinner } from '@/components/ui';
+import { Field, Modal, OptionPicker, Spinner } from '@/components/ui';
 
 type DraftItem = {
   uid: string;
@@ -24,6 +26,7 @@ type DraftItem = {
   title: string;
   quantity: number;
   specs: string;
+  options: string[];
 };
 
 const newItem = (productionType: ProductionType): DraftItem => ({
@@ -32,6 +35,7 @@ const newItem = (productionType: ProductionType): DraftItem => ({
   title: '',
   quantity: 1,
   specs: '',
+  options: [],
 });
 
 export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -86,6 +90,7 @@ export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: ()
             title: item.title.trim(),
             quantity: item.quantity,
             specs: item.specs.trim() || null,
+            options: item.options,
           })),
       };
 
@@ -267,11 +272,16 @@ export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: ()
                       value={item.productionType}
                       onChange={(e) =>
                         setItems((prev) =>
-                          prev.map((it, i) =>
-                            i === index
-                              ? { ...it, productionType: e.target.value as ProductionType }
-                              : it,
-                          ),
+                          prev.map((it, i) => {
+                            if (i !== index) return it;
+                            const productionType = e.target.value as ProductionType;
+                            // خيارات النوع القديم لا تنطبق على الجديد
+                            return {
+                              ...it,
+                              productionType,
+                              options: sanitizeItemOptions(productionType, it.options),
+                            };
+                          }),
                         )
                       }
                       aria-label="نوع الشغل"
@@ -332,6 +342,21 @@ export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: ()
                     }
                     aria-label="المواصفات"
                   />
+
+                  <div className="mt-2">
+                    <p className="mb-1.5 text-[11px] font-medium text-slate-500">
+                      خيارات {PRODUCTION_TYPE_LABELS[item.productionType]}
+                    </p>
+                    <OptionPicker
+                      options={ITEM_OPTIONS[item.productionType] ?? []}
+                      selected={item.options}
+                      onChange={(next) =>
+                        setItems((prev) =>
+                          prev.map((it, i) => (i === index ? { ...it, options: next } : it)),
+                        )
+                      }
+                    />
+                  </div>
                 </div>
               ))}
             </div>

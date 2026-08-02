@@ -42,6 +42,8 @@ export type ItemCard = {
   status: ItemStatus;
   quantity: number;
   specs: string | null;
+  /** مفاتيح الخيارات المختارة — تُترجَم بـ itemOptionLabels في lib/stages */
+  options: string[];
   position: number;
   assignee: UserBadge | null;
   attachmentsCount: number;

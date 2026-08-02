@@ -5,6 +5,7 @@ import { forbidden, ok, requireUser, route, notFound } from '@/lib/api';
 import { allowedProductionTypes, can } from '@/lib/permissions';
 import { findOrderOrThrow, getSettings, logActivity } from '@/lib/orders';
 import { deleteStoredFile } from '@/lib/storage';
+import { parseList } from '@/lib/serialize';
 import { PRIORITIES } from '@/lib/stages';
 
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,8 @@ export const GET = route(async (_request: Request, { params }: Params) => {
   return ok({
     order: {
       ...order,
+      // الخيارات مخزَّنة كنص JSON، والواجهة تتوقع مصفوفة
+      items: order.items.map((item) => ({ ...item, options: parseList(item.options) })),
       attachments,
       comments,
       totalItems: order._count.items,
