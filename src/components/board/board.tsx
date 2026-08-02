@@ -5,7 +5,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useDroppable,
   useSensor,
@@ -86,10 +87,13 @@ export function Board() {
 
   const prefix = data?.orderNumberPrefix ?? '';
 
-  // PointerSensor وحده يكفي للماوس واللمس والقلم. السحب باللمس يعمل لأن مقبض
-  // السحب يحمل touch-action: none، فلا يسرق المتصفح الحركة ويحوّلها إلى تمرير.
+  // نفصل الماوس عن اللمس عمدًا بدل PointerSensor الموحّد، لأن لكل منهما
+  // منطقة تفعيل مختلفة: الماوس يسحب من أي مكان في الكارت (كما كان)، واللمس
+  // يسحب من المقبض وحده حتى يبقى تمرير العمود بالإصبع ممكنًا. التوزيع نفسه
+  // يحدث في SortableCard أدناه.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -428,7 +432,7 @@ function BoardColumn({
                         onOpenOrder(card.type === 'order' ? card.id : card.order.id);
                       }
                     }}
-                    className="cursor-pointer"
+                    className="cursor-grab active:cursor-grabbing"
                   >
                     {card.type === 'order' ? (
                       <OrderCardBody
@@ -472,10 +476,17 @@ function BoardColumn({
 /**
  * الكارت القابل للسحب.
  *
- * مستمعو السحب يعيشون على مقبض مخصّص وحده — وليس على الكارت كله — والمقبض
- * يحمل `touch-action: none`. بدون ذلك يعتبر متصفح الموبايل حركة الإصبع تمريرًا
- * للعمود ويُلغي مؤشر السحب (pointercancel)، فلا يبدأ السحب أبدًا. وبقاء بقية
- * الكارت بسلوك اللمس الافتراضي يُبقي تمرير العمود والنقر لفتح الأوردر يعملان.
+ * مُفعِّلات السحب موزّعة على عنصرين حسب أداة الإدخال:
+ *
+ *  - الماوس (`onMouseDown`) على الكارت كله — السلوك المعتاد على سطح المكتب،
+ *    والماوس لا يتأثر بـ touch-action أصلًا.
+ *  - اللمس (`onTouchStart`) ولوحة المفاتيح على المقبض وحده، والمقبض يحمل
+ *    `touch-action: none`. بدون ذلك يعتبر متصفح الموبايل حركة الإصبع تمريرًا
+ *    للعمود ويُلغي السحب قبل أن يبدأ. وبقاء بقية الكارت بسلوك اللمس الافتراضي
+ *    يُبقي تمرير العمود بالإصبع ممكنًا.
+ *
+ * الضغط بالماوس على المقبض يصعد إلى الكارت فيلتقطه MouseSensor، فالمقبض يعمل
+ * بالماوس أيضًا دون أن نسجّل مُفعِّلين على نفس الحدث.
  */
 function SortableCard({
   id,
@@ -494,14 +505,15 @@ function SortableCard({
     isDragging,
   } = useSortable({ id });
 
-  // touchAction: none هو ما يجعل السحب باللمس ممكنًا — مكتوب inline ليضمن
-  // ألا تتجاوزه أي قاعدة CSS ولا يسقط في تنقية Tailwind.
+  const { onMouseDown, ...touchAndKeyboardListeners } = listeners ?? {};
+
   const handle = (
     <button
       type="button"
       ref={setActivatorNodeRef}
       {...attributes}
-      {...listeners}
+      {...touchAndKeyboardListeners}
+      // مكتوب inline ليضمن ألا تتجاوزه قاعدة CSS ولا يسقط في تنقية Tailwind
       style={{ touchAction: 'none' }}
       onClick={(event) => event.stopPropagation()}
       className="-ms-1 shrink-0 cursor-grab rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
@@ -515,6 +527,7 @@ function SortableCard({
   return (
     <div
       ref={setNodeRef}
+      onMouseDown={onMouseDown as React.MouseEventHandler<HTMLDivElement> | undefined}
       style={{
         transform: CSS.Translate.toString(transform),
         transition,
