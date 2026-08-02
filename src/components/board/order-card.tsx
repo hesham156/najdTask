@@ -21,10 +21,16 @@ export function OrderCardBody({
   card,
   prefix,
   dragging,
+  handle,
+  action,
 }: {
   card: OrderCardType;
   prefix: string;
   dragging?: boolean;
+  /** مقبض السحب — يُمرَّر من اللوحة، وغائب في طبقة السحب المعاينة */
+  handle?: React.ReactNode;
+  /** زر "نقل إلى..." */
+  action?: React.ReactNode;
 }) {
   const due = dueState(card.dueDate);
   const progress = card.totalItems > 0 ? Math.round((card.doneItems / card.totalItems) * 100) : 0;
@@ -36,14 +42,16 @@ export function OrderCardBody({
         dragging ? 'shadow-lift ring-2 ring-brand-400' : 'hover:shadow-lift',
       )}
     >
-      <header className="mb-2 flex items-start justify-between gap-2">
+      <header className="mb-2 flex items-center gap-1.5">
+        {handle}
         <span className="num shrink-0 rounded-md bg-slate-900 px-1.5 py-0.5 text-[11px] font-bold text-white">
           {prefix}
           {card.number}
         </span>
-        <span className={cn('chip shrink-0', PRIORITY_STYLES[card.priority])}>
+        <span className={cn('chip ms-auto shrink-0', PRIORITY_STYLES[card.priority])}>
           {PRIORITY_LABELS[card.priority]}
         </span>
+        {action}
       </header>
 
       <h3 className="text-sm font-semibold leading-snug text-slate-900">{card.title}</h3>

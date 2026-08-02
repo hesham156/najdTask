@@ -17,6 +17,8 @@ export function ItemCardBody({
   card,
   prefix,
   dragging,
+  handle,
+  action,
   canChangeStatus,
   onStatusChange,
   busy,
@@ -24,6 +26,10 @@ export function ItemCardBody({
   card: ItemCardType;
   prefix: string;
   dragging?: boolean;
+  /** مقبض السحب — يُمرَّر من اللوحة، وغائب في طبقة السحب المعاينة */
+  handle?: React.ReactNode;
+  /** زر "نقل إلى..." */
+  action?: React.ReactNode;
   canChangeStatus: boolean;
   onStatusChange?: (status: ItemStatus) => void;
   busy?: boolean;
@@ -42,14 +48,16 @@ export function ItemCardBody({
         dragging ? 'shadow-lift ring-2 ring-brand-400' : 'hover:shadow-lift',
       )}
     >
-      <header className="mb-2 flex items-center justify-between gap-2">
+      <header className="mb-2 flex items-center gap-1.5">
+        {handle}
         <span className="num shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold text-slate-700">
           {prefix}
           {card.order.number}
         </span>
-        <span className={cn('chip shrink-0', ITEM_STATUS_STYLES[card.status])}>
+        <span className={cn('chip ms-auto shrink-0', ITEM_STATUS_STYLES[card.status])}>
           {ITEM_STATUS_LABELS[card.status]}
         </span>
+        {action}
       </header>
 
       <h3 className={cn('text-sm font-semibold leading-snug text-slate-900', done && 'line-through')}>

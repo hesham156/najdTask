@@ -6,7 +6,6 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
-  TouchSensor,
   closestCorners,
   useDroppable,
   useSensor,
@@ -24,14 +23,20 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Inbox, Plus, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeftRight, GripVertical, Inbox, Plus, RefreshCw, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { apiGet, apiPatch, apiPost } from '@/lib/client';
 import { cn } from '@/lib/utils';
-import type { ItemStatus } from '@/lib/stages';
+import {
+  ORDER_STAGE_LABELS,
+  canTransition,
+  getColumn,
+  type ItemStatus,
+  type OrderStage,
+} from '@/lib/stages';
 import { usePermissions } from '@/components/session';
-import { EmptyState, PageLoader, Spinner } from '@/components/ui';
+import { EmptyState, Modal, PageLoader, Spinner } from '@/components/ui';
 import { CreateOrderModal } from '@/components/orders/create-order-modal';
 import { OrderDetailModal } from '@/components/orders/order-detail-modal';
 import type { BoardCard, BoardColumnData, BoardData } from '@/types/board';
@@ -56,6 +61,7 @@ export function Board() {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
+  const [moveCard, setMoveCard] = useState<BoardCard | null>(null);
 
   const columnsRef = useRef<BoardColumnData[]>([]);
   const originRef = useRef<{ column: string; index: number; card: BoardCard } | null>(null);
@@ -80,10 +86,10 @@ export function Board() {
 
   const prefix = data?.orderNumberPrefix ?? '';
 
+  // PointerSensor وحده يكفي للماوس واللمس والقلم. السحب باللمس يعمل لأن مقبض
+  // السحب يحمل touch-action: none، فلا يسرق المتصفح الحركة ويحوّلها إلى تمرير.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    // ضغطة مطوّلة على الموبايل حتى لا يتعارض السحب مع تمرير الصفحة
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -108,6 +114,19 @@ export function Board() {
       queryClient.invalidateQueries({ queryKey: ['board'] });
     },
   });
+
+  /** النقل عبر قائمة "نقل إلى" — الطريق المعتمد على الموبايل بدل السحب بين أعمدة لا تظهر معًا. */
+  function moveTo(card: BoardCard, target: MoveTarget) {
+    moveMutation.mutate(
+      { card, toColumn: target.key, position: 0 },
+      {
+        onSuccess: () => {
+          toast.success(`تم النقل إلى "${target.label}"`);
+          setMoveCard(null);
+        },
+      },
+    );
+  }
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: ItemStatus }) =>
@@ -295,6 +314,8 @@ export function Board() {
               column={column}
               prefix={prefix}
               onOpenOrder={setOpenOrderId}
+              onMoveRequest={setMoveCard}
+              canMove={(card) => moveTargets(card, columns, can).length > 0}
               canChangeStatus={can('items.move')}
               onStatusChange={(id, status) => statusMutation.mutate({ id, status })}
               busy={statusMutation.isPending}
@@ -315,6 +336,15 @@ export function Board() {
         </DragOverlay>
       </DndContext>
 
+      <MoveSheet
+        card={moveCard}
+        prefix={prefix}
+        targets={moveCard ? moveTargets(moveCard, columns, can) : []}
+        busy={moveMutation.isPending}
+        onSelect={(target) => moveCard && moveTo(moveCard, target)}
+        onClose={() => setMoveCard(null)}
+      />
+
       <CreateOrderModal open={createOpen} onClose={() => setCreateOpen(false)} />
       <OrderDetailModal orderId={openOrderId} onClose={() => setOpenOrderId(null)} />
     </div>
@@ -327,6 +357,8 @@ function BoardColumn({
   column,
   prefix,
   onOpenOrder,
+  onMoveRequest,
+  canMove,
   canChangeStatus,
   onStatusChange,
   busy,
@@ -334,6 +366,8 @@ function BoardColumn({
   column: BoardColumnData;
   prefix: string;
   onOpenOrder: (id: string) => void;
+  onMoveRequest: (card: BoardCard) => void;
+  canMove: (card: BoardCard) => boolean;
   canChangeStatus: boolean;
   onStatusChange: (id: string, status: ItemStatus) => void;
   busy: boolean;
@@ -361,39 +395,64 @@ function BoardColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg p-1.5 transition-colors',
+          'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg p-1.5 transition-colors',
           isOver ? 'bg-brand-50 ring-2 ring-brand-300' : 'bg-surface-sunken/60',
         )}
       >
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {column.cards.map((card) => (
             <SortableCard key={cardKey(card)} id={cardKey(card)}>
-              {(dragging) => (
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onOpenOrder(card.type === 'order' ? card.id : card.order.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      onOpenOrder(card.type === 'order' ? card.id : card.order.id);
-                    }
-                  }}
-                  className="cursor-grab active:cursor-grabbing"
-                >
-                  {card.type === 'order' ? (
-                    <OrderCardBody card={card} prefix={prefix} dragging={dragging} />
-                  ) : (
-                    <ItemCardBody
-                      card={card}
-                      prefix={prefix}
-                      dragging={dragging}
-                      canChangeStatus={canChangeStatus}
-                      onStatusChange={(status) => onStatusChange(card.id, status)}
-                      busy={busy}
-                    />
-                  )}
-                </div>
-              )}
+              {({ dragging, handle }) => {
+                const action = canMove(card) ? (
+                  <button
+                    type="button"
+                    className="-me-1 shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    aria-label="نقل الكارت إلى عمود آخر"
+                    title="نقل إلى..."
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMoveRequest(card);
+                    }}
+                  >
+                    <ArrowLeftRight className="h-4 w-4" />
+                  </button>
+                ) : null;
+
+                return (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onOpenOrder(card.type === 'order' ? card.id : card.order.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        onOpenOrder(card.type === 'order' ? card.id : card.order.id);
+                      }
+                    }}
+                    className="cursor-pointer"
+                  >
+                    {card.type === 'order' ? (
+                      <OrderCardBody
+                        card={card}
+                        prefix={prefix}
+                        dragging={dragging}
+                        handle={handle}
+                        action={action}
+                      />
+                    ) : (
+                      <ItemCardBody
+                        card={card}
+                        prefix={prefix}
+                        dragging={dragging}
+                        handle={handle}
+                        action={action}
+                        canChangeStatus={canChangeStatus}
+                        onStatusChange={(status) => onStatusChange(card.id, status)}
+                        busy={busy}
+                      />
+                    )}
+                  </div>
+                );
+              }}
             </SortableCard>
           ))}
         </SortableContext>
@@ -410,16 +469,48 @@ function BoardColumn({
 
 // ───────────────────────────── كارت قابل للسحب ─────────────────────────────
 
+/**
+ * الكارت القابل للسحب.
+ *
+ * مستمعو السحب يعيشون على مقبض مخصّص وحده — وليس على الكارت كله — والمقبض
+ * يحمل `touch-action: none`. بدون ذلك يعتبر متصفح الموبايل حركة الإصبع تمريرًا
+ * للعمود ويُلغي مؤشر السحب (pointercancel)، فلا يبدأ السحب أبدًا. وبقاء بقية
+ * الكارت بسلوك اللمس الافتراضي يُبقي تمرير العمود والنقر لفتح الأوردر يعملان.
+ */
 function SortableCard({
   id,
   children,
 }: {
   id: string;
-  children: (dragging: boolean) => React.ReactNode;
+  children: (args: { dragging: boolean; handle: React.ReactNode }) => React.ReactNode;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id,
-  });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  // touchAction: none هو ما يجعل السحب باللمس ممكنًا — مكتوب inline ليضمن
+  // ألا تتجاوزه أي قاعدة CSS ولا يسقط في تنقية Tailwind.
+  const handle = (
+    <button
+      type="button"
+      ref={setActivatorNodeRef}
+      {...attributes}
+      {...listeners}
+      style={{ touchAction: 'none' }}
+      onClick={(event) => event.stopPropagation()}
+      className="-ms-1 shrink-0 cursor-grab rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing"
+      aria-label="اسحب لنقل الكارت"
+      title="اسحب لنقل الكارت"
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
+  );
 
   return (
     <div
@@ -429,10 +520,132 @@ function SortableCard({
         transition,
         opacity: isDragging ? 0.35 : 1,
       }}
-      {...attributes}
-      {...listeners}
     >
-      {children(isDragging)}
+      {children({ dragging: isDragging, handle })}
     </div>
+  );
+}
+
+// ─────────────────────────────── النقل من قائمة ───────────────────────────────
+
+type MoveTarget = { key: string; label: string; hint?: string };
+
+/**
+ * الأعمدة التي يُسمح بنقل هذا الكارت إليها — نفس ما يقبله السيرفر في
+ * `/api/orders/[id]/move` و `/api/items/[id]/move`، حتى لا نعرض خيارًا يُرفَض.
+ */
+function moveTargets(
+  card: BoardCard,
+  columns: BoardColumnData[],
+  can: (permission: string) => boolean,
+): MoveTarget[] {
+  if (card.type === 'order') {
+    if (!can('orders.move')) return [];
+
+    const from = card.stage as OrderStage;
+    const targets: MoveTarget[] = [];
+
+    for (const column of columns) {
+      const meta = getColumn(column.key);
+      if (!meta || meta.kind !== 'order' || !meta.stage) continue;
+      if (meta.stage === from) continue;
+      // الاكتمال يحدث تلقائيًا بعد انتهاء كل البنود، لا بالنقل اليدوي
+      if (meta.stage === 'completed' && from === 'production') continue;
+      if (!canTransition(from, meta.stage)) continue;
+      targets.push({ key: column.key, label: column.label });
+    }
+
+    // كل ممرات الإنتاج تعني نفس الشيء للأوردر: ابدأ الإنتاج
+    if (canTransition(from, 'production')) {
+      const lane = columns.find((column) => getColumn(column.key)?.kind === 'item');
+      if (lane) {
+        targets.push({
+          key: lane.key,
+          label: ORDER_STAGE_LABELS.production,
+          hint: 'يفتح بنود الشغل ككروت مستقلة في ممرات الإنتاج',
+        });
+      }
+    }
+
+    return targets;
+  }
+
+  if (!can('items.move')) return [];
+
+  const targets: MoveTarget[] = [];
+
+  const completed = columns.find((column) => getColumn(column.key)?.stage === 'completed');
+  if (completed && card.status !== 'done') {
+    targets.push({ key: completed.key, label: completed.label, hint: 'يعلّم البند كمنتهٍ' });
+  }
+
+  if (can('items.edit')) {
+    for (const column of columns) {
+      const meta = getColumn(column.key);
+      if (!meta || meta.kind !== 'item' || !meta.productionType) continue;
+      if (meta.productionType === card.productionType) continue;
+      targets.push({ key: column.key, label: column.label, hint: 'تحويل نوع الشغل' });
+    }
+  }
+
+  return targets;
+}
+
+function MoveSheet({
+  card,
+  prefix,
+  targets,
+  busy,
+  onSelect,
+  onClose,
+}: {
+  card: BoardCard | null;
+  prefix: string;
+  targets: MoveTarget[];
+  busy: boolean;
+  onSelect: (target: MoveTarget) => void;
+  onClose: () => void;
+}) {
+  if (!card) return null;
+
+  const number = card.type === 'order' ? card.number : card.order.number;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="نقل إلى"
+      description={`${prefix}${number} — ${card.title}`}
+      size="sm"
+    >
+      {targets.length === 0 ? (
+        <p className="text-sm leading-relaxed text-slate-500">
+          لا توجد أعمدة يمكن نقل هذا الكارت إليها من مكانه الحالي.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {targets.map((target) => (
+            <button
+              key={`${target.key}:${target.label}`}
+              type="button"
+              disabled={busy}
+              onClick={() => onSelect(target)}
+              className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-3 text-start transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span
+                className={cn('h-2.5 w-2.5 shrink-0 rounded-full', getColumn(target.key)?.accent)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-slate-800">{target.label}</span>
+                {target.hint ? (
+                  <span className="mt-0.5 block text-xs text-slate-500">{target.hint}</span>
+                ) : null}
+              </span>
+              {busy ? <Spinner className="shrink-0 text-slate-400" /> : null}
+            </button>
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }
