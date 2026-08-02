@@ -1,13 +1,18 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ClipboardList, Receipt } from 'lucide-react';
 
 import { apiGet } from '@/lib/client';
 import { cn } from '@/lib/utils';
-import { PageLoader } from '@/components/ui';
+import { PageLoader, Spinner } from '@/components/ui';
+
+type ConsumptionUnitRow = { unit: string; total: number; count: number };
 
 type ReportData = {
+  period: { days: number; label: string };
+  periods: { days: number; label: string }[];
   totalOrders: number;
   totalInvoiced: number;
   lateOrders: number;
@@ -20,13 +25,25 @@ type ReportData = {
     done: number;
     total: number;
   }[];
+  consumption: {
+    totalSheets: number;
+    totalMeters: number;
+    recordedItems: number;
+    totalItems: number;
+    byType: { type: string; label: string; recordedItems: number; units: ConsumptionUnitRow[] }[];
+  };
   topCustomers: { name: string; count: number }[];
 };
 
+const num = (value: number) => value.toLocaleString('en-US');
+
 export function ReportsView() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['reports'],
-    queryFn: () => apiGet<ReportData>('/api/reports'),
+  const [days, setDays] = useState(30);
+
+  const { data, isLoading, error, isFetching } = useQuery({
+    queryKey: ['reports', days],
+    queryFn: () => apiGet<ReportData>(`/api/reports?days=${days}`),
+    placeholderData: (previous) => previous,
   });
 
   if (isLoading) return <PageLoader />;
@@ -45,7 +62,32 @@ export function ReportsView() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl p-4 sm:p-6">
-        <h1 className="mb-4 text-lg font-bold text-slate-900">التقارير</h1>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-lg font-bold text-slate-900">
+            التقارير
+            {isFetching ? <Spinner className="ms-2 inline text-slate-400" /> : null}
+          </h1>
+
+          {/* كل الأرقام أدناه محسوبة على أوردرات هذه الفترة */}
+          <div className="flex flex-wrap gap-1" role="group" aria-label="الفترة">
+            {data.periods.map((period) => (
+              <button
+                key={period.days}
+                type="button"
+                onClick={() => setDays(period.days)}
+                aria-pressed={data.period.days === period.days}
+                className={cn(
+                  'rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+                  data.period.days === period.days
+                    ? 'border-brand-400 bg-brand-50 text-brand-700'
+                    : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50',
+                )}
+              >
+                {period.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* بطاقات سريعة */}
         <div className="mb-5 grid gap-3 sm:grid-cols-3">
@@ -117,6 +159,61 @@ export function ReportsView() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        {/* استهلاك الإنتاج */}
+        <section className="card mb-4 p-4">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-800">استهلاك الإنتاج</h2>
+            <p className="text-[11px] text-slate-500">
+              مسجَّل على <span className="num">{data.consumption.recordedItems}</span> من{' '}
+              <span className="num">{data.consumption.totalItems}</span> بند
+            </p>
+          </div>
+
+          <div className="mb-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">إجمالي الشيتات</p>
+              <p className="num text-xl font-bold text-slate-900">
+                {num(data.consumption.totalSheets)}
+                <span className="ms-1 text-xs font-normal text-slate-500">شيت</span>
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">إجمالي الأمتار</p>
+              <p className="num text-xl font-bold text-slate-900">
+                {num(data.consumption.totalMeters)}
+                <span className="ms-1 text-xs font-normal text-slate-500">متر</span>
+              </p>
+            </div>
+          </div>
+
+          {data.consumption.byType.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500">
+              لم يسجّل عمال الإنتاج أي استهلاك في هذه الفترة
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {data.consumption.byType.map((row) => (
+                <li key={row.type} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                  <span className="font-medium text-slate-800">{row.label}</span>
+                  <span className="text-[11px] text-slate-400">
+                    <span className="num">{row.recordedItems}</span> بند
+                  </span>
+                  <span className="ms-auto flex flex-wrap gap-1.5">
+                    {row.units.map((u) => (
+                      <span
+                        key={u.unit}
+                        className="rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700"
+                      >
+                        <span className="num">{num(u.total)}</span> {u.unit}
+                      </span>
+                    ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* أكثر العملاء */}
