@@ -21,7 +21,8 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: '/icons/icon-192.png',
-    apple: '/icons/icon-192.png',
+    // iOS يستخدم مقاس 180×180 تحديدًا لأيقونة الشاشة الرئيسية
+    apple: '/icons/apple-touch-icon.png',
   },
 };
 

@@ -5,6 +5,7 @@ import { ApiError, badRequest, forbidden, ok, requireUser, route } from '@/lib/a
 import { can, canSeeColumn } from '@/lib/permissions';
 import { assertOrderReadyForProduction, findOrderOrThrow, logActivity, reposition } from '@/lib/orders';
 import { ORDER_STAGE_LABELS, canTransition, getColumn, type OrderStage } from '@/lib/stages';
+import { notifyOrderEnteredProduction, notifyOrderStageChanged } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,6 +76,25 @@ export const POST = route(async (request: Request, { params }: { params: { id: s
     toStage: to,
     details: `نقل الأوردر من "${ORDER_STAGE_LABELS[from]}" إلى "${ORDER_STAGE_LABELS[to]}"`,
   });
+
+  // الدخول للإنتاج يُشعِر كل عامل ببنود ممرّه هو فقط، وبقية المراحل تُشعِر
+  // من يتابع عمودها في اللوحة
+  if (to === 'production') {
+    await notifyOrderEnteredProduction({
+      orderId: order.id,
+      number: order.number,
+      title: order.title,
+      actorId: user.id,
+    });
+  } else {
+    await notifyOrderStageChanged({
+      orderId: order.id,
+      number: order.number,
+      title: order.title,
+      toStage: to,
+      actorId: user.id,
+    });
+  }
 
   return ok({ order: { id: updated.id, stage: updated.stage }, moved: true });
 });

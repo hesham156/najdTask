@@ -6,6 +6,7 @@ import { allowedProductionTypes, can } from '@/lib/permissions';
 import { allocateOrderNumber, getSettings, logActivity } from '@/lib/orders';
 import { PRIORITIES, PRODUCTION_TYPES, isOrderStage, sanitizeItemOptions } from '@/lib/stages';
 import { serializeList } from '@/lib/serialize';
+import { notifyOrderCreated } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,6 +157,14 @@ export const POST = route(async (request: Request) => {
     action: 'created',
     toStage: 'orders',
     details: `أنشأ الأوردر رقم ${order.number} للعميل ${order.customerName}`,
+  });
+
+  await notifyOrderCreated({
+    orderId: order.id,
+    number: order.number,
+    title: order.title,
+    customerName: order.customerName,
+    actorId: user.id,
   });
 
   return ok({ order }, 201);

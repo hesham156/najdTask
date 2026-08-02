@@ -6,6 +6,7 @@ import { can } from '@/lib/permissions';
 import { assertCanTouchProductionType, findOrderOrThrow, logActivity, syncOrderStageWithItems } from '@/lib/orders';
 import { PRODUCTION_TYPES, PRODUCTION_TYPE_LABELS, sanitizeItemOptions } from '@/lib/stages';
 import { serializeList } from '@/lib/serialize';
+import { notifyItemAssigned } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,17 @@ export const POST = route(async (request: Request, { params }: { params: { id: s
     action: 'item_created',
     details: `أضاف بند ${PRODUCTION_TYPE_LABELS[body.productionType]}: ${item.title}`,
   });
+
+  if (item.assigneeId) {
+    await notifyItemAssigned({
+      orderId: order.id,
+      orderNumber: order.number,
+      itemTitle: item.title,
+      productionType: item.productionType,
+      assigneeId: item.assigneeId,
+      actorId: user.id,
+    });
+  }
 
   // إضافة بند جديد لأوردر مكتمل تعيده إلى الإنتاج
   await syncOrderStageWithItems(order.id, user.id);

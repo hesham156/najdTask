@@ -17,6 +17,7 @@ import {
   sanitizeItemOptions,
 } from '@/lib/stages';
 import { parseList, serializeList } from '@/lib/serialize';
+import { notifyItemAssigned } from '@/lib/notifications';
 import { deleteStoredFile } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
@@ -112,6 +113,17 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
       userId: user.id,
       action: 'item_updated',
       details: `عدّل بند "${item.title}"`,
+    });
+  }
+
+  if (changingAssignee && body.assigneeId) {
+    await notifyItemAssigned({
+      orderId: item.orderId,
+      orderNumber: item.order.number,
+      itemTitle: updated.title,
+      productionType: updated.productionType,
+      assigneeId: body.assigneeId,
+      actorId: user.id,
     });
   }
 

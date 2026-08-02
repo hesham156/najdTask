@@ -21,6 +21,7 @@ import { apiPost } from '@/lib/client';
 import { cn, initials } from '@/lib/utils';
 import { usePermissions } from '@/components/session';
 import { InstallPrompt } from '@/components/install-prompt';
+import { NotificationsToggle } from '@/components/notifications-toggle';
 
 type NavItem = {
   href: string;
@@ -96,6 +97,7 @@ export function AppShell({
         <div className="flex-1" />
 
         <InstallPrompt />
+        <NotificationsToggle />
 
         <div className="flex items-center gap-2 rounded-lg py-1 pe-1 ps-2">
           <div className="hidden text-end sm:block">

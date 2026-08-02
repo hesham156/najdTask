@@ -55,6 +55,7 @@ model User {
   uploads        Attachment[]
   comments       Comment[]
   activities     ActivityLog[]
+  pushSubscriptions PushSubscription[]
 
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())
@@ -234,6 +235,28 @@ model ActivityLog {
   createdAt DateTime @default(now())
 
   @@index([orderId, createdAt])
+}
+
+// ──────────────────────────── اشتراكات الإشعارات ────────────────────────────
+
+// اشتراك Web Push واحد = متصفح/جهاز واحد. المستخدم الواحد قد يكون له أكثر من
+// اشتراك (موبايل + ديسكتوب)، ونحذف الاشتراك تلقائيًا لو رفضه خادم الدفع
+// (410/404) لأن ذلك يعني أن المستخدم أزال التطبيق أو ألغى الإذن.
+model PushSubscription {
+  id       String @id @default(cuid())
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  userAgent String?
+
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([userId])
 }
 
 // ───────────────────────────────── الإعدادات ─────────────────────────────────

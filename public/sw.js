@@ -33,6 +33,53 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// ──────────────────────────────── الإشعارات ────────────────────────────────
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data ? event.data.text() : '' };
+  }
+
+  const title = payload.title || 'مطبعة نجد';
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      // إشعارات بنفس الوسم يحلّ أحدثها محل أقدمها بدل تكديسها
+      tag: payload.tag || 'najd',
+      renotify: Boolean(payload.tag),
+      dir: 'rtl',
+      lang: 'ar',
+      data: { url: payload.url || '/board' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const target = (event.notification.data && event.notification.data.url) || '/board';
+
+  // لو التطبيق مفتوح بالفعل نركّز نافذته وننقلها للمسار بدل فتح نسخة جديدة
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (new URL(client.url).origin === self.location.origin) {
+          return client.focus().then((focused) =>
+            focused && 'navigate' in focused ? focused.navigate(target) : focused,
+          );
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
