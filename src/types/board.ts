@@ -16,7 +16,6 @@ export type OrderCard = {
   type: 'order';
   id: string;
   number: number;
-  title: string;
   customerName: string;
   priority: Priority;
   stage: string;
@@ -53,7 +52,6 @@ export type ItemCard = {
   order: {
     id: string;
     number: number;
-    title: string;
     customerName: string;
     priority: Priority;
     dueDate: string | null;

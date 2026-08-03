@@ -255,7 +255,7 @@ export function Board() {
       cards: column.cards.filter((card) => {
         const haystack =
           card.type === 'order'
-            ? `${card.number} ${card.title} ${card.customerName}`
+            ? `${card.number} ${card.customerName}`
             : `${card.order.number} ${card.title} ${card.order.customerName} ${card.specs ?? ''}`;
         return haystack.toLowerCase().includes(term);
       }),
@@ -640,13 +640,14 @@ function MoveSheet({
   if (!card) return null;
 
   const number = card.type === 'order' ? card.number : card.order.number;
+  const label = card.type === 'order' ? card.customerName : card.title;
 
   return (
     <Modal
       open
       onClose={onClose}
       title="نقل إلى"
-      description={`${prefix}${number} — ${card.title}`}
+      description={`${prefix}${number} — ${label}`}
       size="sm"
     >
       {targets.length === 0 ? (

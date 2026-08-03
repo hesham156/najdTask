@@ -60,7 +60,6 @@ export const GET = route(async () => {
             select: {
               id: true,
               number: true,
-              title: true,
               customerName: true,
               priority: true,
               dueDate: true,
@@ -78,7 +77,6 @@ export const GET = route(async () => {
       type: 'order',
       id: order.id,
       number: order.number,
-      title: order.title,
       customerName: order.customerName,
       priority: order.priority as Priority,
       stage: order.stage,
@@ -117,7 +115,6 @@ export const GET = route(async () => {
     order: {
       id: item.order.id,
       number: item.order.number,
-      title: item.order.title,
       customerName: item.order.customerName,
       priority: item.order.priority as Priority,
       dueDate: item.order.dueDate?.toISOString() ?? null,

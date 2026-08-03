@@ -140,7 +140,7 @@ export async function findOrderOrThrow(orderId: string) {
 export async function findItemOrThrow(itemId: string) {
   const item = await prisma.orderItem.findUnique({
     where: { id: itemId },
-    include: { order: { select: { id: true, number: true, stage: true, title: true } } },
+    include: { order: { select: { id: true, number: true, stage: true, customerName: true } } },
   });
   if (!item) throw notFound('بند الشغل');
   return item;

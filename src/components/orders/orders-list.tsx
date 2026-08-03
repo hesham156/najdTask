@@ -24,7 +24,6 @@ import { CreateOrderModal } from './create-order-modal';
 type ListOrder = {
   id: string;
   number: number;
-  title: string;
   customerName: string;
   stage: OrderStage;
   priority: Priority;
@@ -87,7 +86,7 @@ export function OrdersList() {
             <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-slate-400" />
             <input
               className="input ps-9"
-              placeholder="ابحث برقم الأوردر أو العنوان أو العميل..."
+              placeholder="ابحث برقم الأوردر أو اسم العميل..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -126,7 +125,6 @@ export function OrdersList() {
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500">
                   <tr>
                     <th className="px-3 py-2.5 text-start font-medium">الرقم</th>
-                    <th className="px-3 py-2.5 text-start font-medium">الأوردر</th>
                     <th className="px-3 py-2.5 text-start font-medium">العميل</th>
                     <th className="px-3 py-2.5 text-start font-medium">المرحلة</th>
                     <th className="px-3 py-2.5 text-start font-medium">البنود</th>
@@ -147,11 +145,13 @@ export function OrdersList() {
                         </Link>
                       </td>
                       <td className="px-3 py-2.5">
-                        <Link href={`/orders/${order.id}`} className="hover:underline">
-                          {order.title}
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="font-medium text-slate-800 hover:underline"
+                        >
+                          {order.customerName}
                         </Link>
                       </td>
-                      <td className="px-3 py-2.5 text-slate-600">{order.customerName}</td>
                       <td className="px-3 py-2.5 text-slate-600">
                         {ORDER_STAGE_LABELS[order.stage]}
                       </td>
@@ -206,8 +206,7 @@ export function OrdersList() {
                       {PRIORITY_LABELS[order.priority]}
                     </span>
                   </div>
-                  <p className="text-sm font-semibold text-slate-900">{order.title}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{order.customerName}</p>
+                  <p className="text-sm font-semibold text-slate-900">{order.customerName}</p>
                   <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
                     <span className="chip border-slate-200 bg-slate-50">
                       {ORDER_STAGE_LABELS[order.stage]}

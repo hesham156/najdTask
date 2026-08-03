@@ -81,7 +81,6 @@ export const GET = route(async (_request: Request, { params }: Params) => {
 // ─────────────────────────────── تعديل الأوردر ───────────────────────────────
 
 const updateSchema = z.object({
-  title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(4000).nullable().optional(),
   customerName: z.string().trim().min(1).max(160).optional(),
   priority: z.enum(PRIORITIES).optional(),
@@ -122,7 +121,6 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
   const updated = await prisma.order.update({
     where: { id: params.id },
     data: {
-      ...(body.title !== undefined ? { title: body.title } : {}),
       ...(body.description !== undefined ? { description: body.description } : {}),
       ...(body.customerName !== undefined ? { customerName: body.customerName } : {}),
       ...(body.priority !== undefined ? { priority: body.priority } : {}),

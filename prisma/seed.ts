@@ -284,8 +284,7 @@ async function main() {
   const order1 = await prisma.order.create({
     data: {
       number: 1,
-      title: 'مطبوعات افتتاح الفرع الجديد',
-      description: 'كروت شخصية + بروشورات + بانر للواجهة',
+      description: 'مطبوعات افتتاح الفرع الجديد: كروت شخصية + بروشورات + بانر للواجهة',
       customerName: customers[0].name,
       customerId: customers[0].id,
       stage: 'production',
@@ -324,8 +323,7 @@ async function main() {
   const order2 = await prisma.order.create({
     data: {
       number: 2,
-      title: 'قوائم طعام جديدة',
-      description: 'منيو بتصميم جديد لفروع المطعم الثلاثة',
+      description: 'قوائم طعام جديدة — منيو بتصميم جديد لفروع المطعم الثلاثة',
       customerName: customers[1].name,
       customerId: customers[1].id,
       stage: 'design',
@@ -349,7 +347,7 @@ async function main() {
   const order3 = await prisma.order.create({
     data: {
       number: 3,
-      title: 'أكياس ورقية وروشتات',
+      description: 'أكياس ورقية وروشتات',
       customerName: customers[2].name,
       customerId: customers[2].id,
       stage: 'orders',

@@ -92,7 +92,6 @@ type OrderDetailData = {
   order: {
     id: string;
     number: number;
-    title: string;
     description: string | null;
     customerName: string;
     stage: OrderStage;
@@ -188,13 +187,13 @@ export function OrderDetail({ orderId }: { orderId: string }) {
             </span>
           </div>
 
-          <h2 className="text-lg font-bold leading-tight text-slate-900">{order.title}</h2>
+          {/* لا عنوان للأوردر — اسم العميل هو ترويسته */}
+          <h2 className="flex items-center gap-1.5 text-lg font-bold leading-tight text-slate-900">
+            <User className="h-4 w-4 shrink-0 text-slate-400" />
+            {order.customerName}
+          </h2>
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-            <span className="flex items-center gap-1">
-              <User className="h-3.5 w-3.5" />
-              {order.customerName}
-            </span>
             {order.dueDate ? (
               <span className="flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
@@ -740,7 +739,6 @@ function EditOrderForm({
   order: OrderDetailData['order'];
   onDone: () => void;
 }) {
-  const [title, setTitle] = useState(order.title);
   const [customerName, setCustomerName] = useState(order.customerName);
   const [description, setDescription] = useState(order.description ?? '');
   const [priority, setPriority] = useState<Priority>(order.priority);
@@ -749,7 +747,6 @@ function EditOrderForm({
   const mutation = useMutation({
     mutationFn: () =>
       apiPatch(`/api/orders/${order.id}`, {
-        title: title.trim(),
         customerName: customerName.trim(),
         description: description.trim() || null,
         priority,
@@ -770,10 +767,6 @@ function EditOrderForm({
         mutation.mutate();
       }}
     >
-      <Field label="العنوان" className="sm:col-span-2">
-        <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </Field>
-
       <Field label="اسم العميل">
         <input
           className="input"

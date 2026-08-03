@@ -87,7 +87,7 @@ model Order {
   id     String @id @default(cuid())
   number Int    @unique // الرقم التسلسلي، يبدأ من الرقم المحدد في الإعدادات
 
-  title       String
+  // لا يوجد عنوان للأوردر — يُعرَف برقمه واسم عميله، والتفاصيل في description والبنود
   description String?
 
   customerName String // نسخة ثابتة من اسم العميل وقت إنشاء الأوردر

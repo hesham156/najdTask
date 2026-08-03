@@ -54,12 +54,11 @@ export function OrderCardBody({
         {action}
       </header>
 
-      <h3 className="text-sm font-semibold leading-snug text-slate-900">{card.title}</h3>
-
-      <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-        <User className="h-3 w-3 shrink-0" />
+      {/* لا عنوان للأوردر — اسم العميل هو ما يميّزه بعد رقمه */}
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold leading-snug text-slate-900">
+        <User className="h-3.5 w-3.5 shrink-0 text-slate-400" />
         <span className="truncate">{card.customerName}</span>
-      </p>
+      </h3>
 
       {card.items.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1">

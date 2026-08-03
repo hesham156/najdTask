@@ -46,7 +46,6 @@ export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: ()
   const availableTypes = PRODUCTION_TYPES.filter((type) => canSeeProductionType(type));
   const defaultType = availableTypes[0] ?? 'digital';
 
-  const [title, setTitle] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [description, setDescription] = useState('');
@@ -64,7 +63,6 @@ export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: ()
   });
 
   function reset() {
-    setTitle('');
     setCustomerName('');
     setCustomerPhone('');
     setDescription('');
@@ -77,7 +75,6 @@ export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: ()
   const mutation = useMutation({
     mutationFn: async () => {
       const payload = {
-        title: title.trim(),
         description: description.trim() || null,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || null,
@@ -129,7 +126,6 @@ export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: ()
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!title.trim()) return toast.error('اكتب عنوان الأوردر');
     if (!customerName.trim()) return toast.error('اكتب اسم العميل');
     const named = items.filter((item) => item.title.trim());
     if (items.length > 0 && named.length === 0) {
@@ -172,17 +168,6 @@ export function CreateOrderModal({ open, onClose }: { open: boolean; onClose: ()
       <form id="create-order-form" onSubmit={submit} className="space-y-5">
         {/* بيانات أساسية */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="عنوان الأوردر" htmlFor="order-title" required className="sm:col-span-2">
-            <input
-              id="order-title"
-              className="input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="مثال: مطبوعات افتتاح الفرع الجديد"
-              required
-            />
-          </Field>
-
           <Field label="اسم العميل" htmlFor="customer-name" required>
             <input
               id="customer-name"

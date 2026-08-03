@@ -80,7 +80,6 @@ const orderUrl = (orderId: string) => `/orders/${orderId}`;
 export async function notifyOrderCreated(input: {
   orderId: string;
   number: number;
-  title: string;
   customerName: string;
   actorId: string;
 }) {
@@ -93,7 +92,7 @@ export async function notifyOrderCreated(input: {
 
     await dispatch(recipients, {
       title: `أوردر جديد #${input.number}`,
-      body: `${input.title} — ${input.customerName}`,
+      body: `العميل: ${input.customerName}`,
       url: orderUrl(input.orderId),
       tag: `order-created-${input.orderId}`,
     });
@@ -107,7 +106,7 @@ export async function notifyOrderCreated(input: {
 export async function notifyOrderEnteredProduction(input: {
   orderId: string;
   number: number;
-  title: string;
+  customerName: string;
   actorId: string;
 }) {
   try {
@@ -132,7 +131,7 @@ export async function notifyOrderEnteredProduction(input: {
 
       await dispatch(recipients, {
         title: `شغل ${label} جديد`,
-        body: `أوردر #${input.number} — ${input.title} (${count} بند)`,
+        body: `أوردر #${input.number} — ${input.customerName} (${count} بند)`,
         url: orderUrl(input.orderId),
         tag: `production-${input.orderId}-${type}`,
       });
@@ -147,7 +146,7 @@ export async function notifyOrderEnteredProduction(input: {
 export async function notifyOrderStageChanged(input: {
   orderId: string;
   number: number;
-  title: string;
+  customerName: string;
   toStage: OrderStage;
   actorId: string;
 }) {
@@ -164,7 +163,7 @@ export async function notifyOrderStageChanged(input: {
 
     await dispatch(recipients, {
       title: `أوردر في ${ORDER_STAGE_LABELS[input.toStage]}`,
-      body: `#${input.number} — ${input.title}`,
+      body: `#${input.number} — ${input.customerName}`,
       url: orderUrl(input.orderId),
       tag: `stage-${input.orderId}`,
     });

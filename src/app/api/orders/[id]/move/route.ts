@@ -83,14 +83,14 @@ export const POST = route(async (request: Request, { params }: { params: { id: s
     await notifyOrderEnteredProduction({
       orderId: order.id,
       number: order.number,
-      title: order.title,
+      customerName: order.customerName,
       actorId: user.id,
     });
   } else {
     await notifyOrderStageChanged({
       orderId: order.id,
       number: order.number,
-      title: order.title,
+      customerName: order.customerName,
       toStage: to,
       actorId: user.id,
     });
