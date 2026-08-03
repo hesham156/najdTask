@@ -5,6 +5,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from './prisma';
 import { ApiError, badRequest, notFound } from './api';
 import { allowedProductionTypes, type SessionUser } from './permissions';
+import { PRODUCTION_TYPES, PRODUCTION_TYPE_LABELS } from './stages';
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -168,6 +169,7 @@ export async function reposition(
 export async function assertOrderReadyForProduction(orderId: string) {
   const count = await prisma.orderItem.count({ where: { orderId } });
   if (count === 0) {
-    throw badRequest('أضف بنود شغل للأوردر أولًا (أوفست / ديجيتال / اندور) قبل إرساله للإنتاج');
+    const types = PRODUCTION_TYPES.map((type) => PRODUCTION_TYPE_LABELS[type]).join(' / ');
+    throw badRequest(`أضف بنود شغل للأوردر أولًا (${types}) قبل إرساله للإنتاج`);
   }
 }

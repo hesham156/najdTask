@@ -36,8 +36,8 @@ type RoleSeed = {
   productionTypes: string[];
 };
 
-const ALL_ORDER_COLUMNS = ['orders', 'design', 'completed', 'review', 'invoice'];
-const ALL_PRODUCTION = ['digital', 'offset', 'indoor'];
+const ALL_ORDER_COLUMNS = ['orders', 'design', 'postpress', 'completed', 'review', 'invoice'];
+const ALL_PRODUCTION = ['digital', 'offset', 'indoor', 'external'];
 const ALL_COLUMNS = [...ALL_ORDER_COLUMNS, ...ALL_PRODUCTION];
 
 const ROLES: RoleSeed[] = [

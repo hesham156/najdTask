@@ -15,6 +15,7 @@ const TYPE_DOT: Record<ProductionType, string> = {
   digital: 'bg-cyan-500',
   offset: 'bg-amber-500',
   indoor: 'bg-emerald-500',
+  external: 'bg-fuchsia-500',
 };
 
 export function OrderCardBody({

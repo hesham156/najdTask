@@ -4,9 +4,12 @@
  * الفكرة الأساسية في النظام:
  * الأوردر يتحرك ككارت واحد في أعمدة (الأوردرات ← التصميم)، وبعد التصميم
  * "ينفتح" إلى بنود شغل (OrderItem) كل بند بنوع إنتاج مختلف، وكل بند يظهر
- * ككارت مستقل في عموده (ديجيتال / أوفست / اندور). عامل الأوفست يرى بنود
- * الأوفست فقط. ولما كل البنود تخلص، كارت الأوردر يظهر في عمود الاكتمال
- * ويكمل رحلته (المراجعة ← الفاتورة وسند التسليم).
+ * ككارت مستقل في عموده (ديجيتال / أوفست / اندور / خارجي أو أخرى). عامل
+ * الأوفست يرى بنود الأوفست فقط. ولما كل البنود تخلص، كارت الأوردر يظهر في
+ * عمود الاكتمال ويكمل رحلته (المراجعة ← الفاتورة وسند التسليم).
+ *
+ * وبين الإنتاج والاكتمال عمود "ما بعد الطباعة" للتشطيبات — مرحلة أوردر
+ * يدوية بالكامل، يُسحَب إليها الكارت ومنها بيد المستخدم.
  *
  * لإضافة نوع إنتاج جديد (مثلًا "ليزر"): أضِف مفتاحه في PRODUCTION_TYPES
  * وعمودًا مقابلًا في BOARD_COLUMNS. باقي النظام يتكيّف تلقائيًا.
@@ -14,13 +17,14 @@
 
 // ────────────────────────────── أنواع الإنتاج ──────────────────────────────
 
-export const PRODUCTION_TYPES = ['digital', 'offset', 'indoor'] as const;
+export const PRODUCTION_TYPES = ['digital', 'offset', 'indoor', 'external'] as const;
 export type ProductionType = (typeof PRODUCTION_TYPES)[number];
 
 export const PRODUCTION_TYPE_LABELS: Record<ProductionType, string> = {
   digital: 'ديجيتال',
   offset: 'أوفست',
   indoor: 'اندور',
+  external: 'خارجي أو أخرى',
 };
 
 export function isProductionType(value: string): value is ProductionType {
@@ -62,6 +66,8 @@ export const CONSUMPTION_UNITS: Record<ProductionType, ConsumptionUnit> = {
   digital: SHEETS,
   offset: SHEETS,
   indoor: METERS,
+  // الشغل الخارجي غالبًا لا يُسجَّل له استهلاك، والحقل اختياري أصلًا
+  external: SHEETS,
 };
 
 export function consumptionUnitFor(productionType: string): ConsumptionUnit {
@@ -115,6 +121,8 @@ export const ITEM_OPTIONS: Record<ProductionType, ItemOption[]> = {
   digital: FINISHING_OPTIONS,
   offset: FINISHING_OPTIONS,
   indoor: INDOOR_OPTIONS,
+  // الشغل الخارجي أو غير المصنَّف بلا قائمة خيارات — تفاصيله تُكتب في المواصفات
+  external: [],
 };
 
 /** تسميات الخيارات المختارة، متجاهلةً أي مفتاح لم يعد موجودًا في القائمة. */
@@ -137,6 +145,7 @@ export const ORDER_STAGES = [
   'orders',
   'design',
   'production',
+  'postpress',
   'completed',
   'review',
   'invoice',
@@ -148,6 +157,7 @@ export const ORDER_STAGE_LABELS: Record<OrderStage, string> = {
   orders: 'الأوردرات',
   design: 'التصميم',
   production: 'تحت الإنتاج',
+  postpress: 'ما بعد الطباعة',
   completed: 'الاكتمال',
   review: 'المراجعة',
   invoice: 'الفاتورة وسند التسليم',
@@ -223,6 +233,24 @@ export const BOARD_COLUMNS: BoardColumn[] = [
     hint: 'بنود طباعة الاندور',
   },
   {
+    key: 'external',
+    label: 'خارجي أو أخرى',
+    kind: 'item',
+    productionType: 'external',
+    accent: 'bg-fuchsia-500',
+    headerBg: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+    hint: 'بنود تتنفَّذ خارج المطبعة أو لا تندرج تحت نوع محدد',
+  },
+  {
+    key: 'postpress',
+    label: 'ما بعد الطباعة',
+    kind: 'order',
+    stage: 'postpress',
+    accent: 'bg-indigo-500',
+    headerBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    hint: 'تشطيبات ما بعد الطباعة — يُسحَب إليه الأوردر يدويًا',
+  },
+  {
     key: 'completed',
     label: 'الاكتمال',
     kind: 'order',
@@ -266,14 +294,19 @@ export function columnForStage(stage: string): BoardColumn | undefined {
 
 /**
  * من أي مرحلة إلى أي مرحلة يُسمح بنقل كارت الأوردر.
- * ملاحظة: الانتقال من production إلى completed لا يتم بالسحب، بل تلقائيًا
- * عندما تنتهي كل بنود الأوردر.
+ *
+ * ملاحظتان:
+ *  - الانتقال من production إلى completed لا يتم بالسحب، بل تلقائيًا عندما
+ *    تنتهي كل بنود الأوردر.
+ *  - postpress مرحلة يدوية بالكامل: تُدخَل بالسحب من الإنتاج أو رجوعًا من
+ *    الاكتمال، وتُغادَر بالسحب. لا شيء ينقل الأوردر إليها أو منها تلقائيًا.
  */
 export const ALLOWED_ORDER_TRANSITIONS: Record<OrderStage, OrderStage[]> = {
   orders: ['design', 'production'],
   design: ['orders', 'production'],
-  production: ['design'],
-  completed: ['review', 'production'],
+  production: ['design', 'postpress'],
+  postpress: ['production', 'completed'],
+  completed: ['review', 'production', 'postpress'],
   review: ['completed', 'invoice', 'design'],
   invoice: ['review', 'delivered'],
   delivered: ['invoice'],
