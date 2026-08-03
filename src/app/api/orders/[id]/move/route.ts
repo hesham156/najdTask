@@ -4,7 +4,13 @@ import { prisma } from '@/lib/prisma';
 import { ApiError, badRequest, forbidden, ok, requireUser, route } from '@/lib/api';
 import { can, canSeeColumn } from '@/lib/permissions';
 import { assertOrderReadyForProduction, findOrderOrThrow, logActivity, reposition } from '@/lib/orders';
-import { ORDER_STAGE_LABELS, canTransition, getColumn, type OrderStage } from '@/lib/stages';
+import {
+  ITEMS_DONE_STAGE,
+  ORDER_STAGE_LABELS,
+  canTransition,
+  getColumn,
+  type OrderStage,
+} from '@/lib/stages';
 import { notifyOrderEnteredProduction, notifyOrderStageChanged } from '@/lib/notifications';
 
 export const dynamic = 'force-dynamic';
@@ -41,10 +47,10 @@ export const POST = route(async (request: Request, { params }: { params: { id: s
     return ok({ order: { id: order.id, stage: order.stage }, moved: false });
   }
 
-  if (to === 'completed' && from === 'production') {
+  if (to === ITEMS_DONE_STAGE && from === 'production') {
     throw new ApiError(
       400,
-      'الأوردر ينتقل إلى الاكتمال تلقائيًا بعد انتهاء كل بنوده. أنهِ البنود المتبقية أولًا.',
+      `الأوردر ينتقل إلى "${ORDER_STAGE_LABELS[ITEMS_DONE_STAGE]}" تلقائيًا بعد انتهاء كل بنوده. أنهِ البنود المتبقية أولًا.`,
     );
   }
 

@@ -5,7 +5,12 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from './prisma';
 import { ApiError, badRequest, notFound } from './api';
 import { allowedProductionTypes, type SessionUser } from './permissions';
-import { PRODUCTION_TYPES, PRODUCTION_TYPE_LABELS } from './stages';
+import {
+  ITEMS_DONE_STAGE,
+  ORDER_STAGE_LABELS,
+  PRODUCTION_TYPES,
+  PRODUCTION_TYPE_LABELS,
+} from './stages';
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -56,12 +61,15 @@ export function assertCanTouchProductionType(user: SessionUser, productionType: 
 // ─────────────────────── مزامنة مرحلة الأوردر مع حالة بنوده ───────────────────────
 
 /**
- * ينقل الأوردر تلقائيًا إلى "الاكتمال" عندما تنتهي كل بنوده، ويعيده إلى
- * "تحت الإنتاج" لو أُعيد فتح أحد البنود. هذا هو ما يجعل كارت الأوردر يظهر في
- * عمود الاكتمال دون أن يسحبه أحد يدويًا.
+ * ينقل الأوردر تلقائيًا إلى ITEMS_DONE_STAGE عندما تنتهي كل بنوده، ويعيده إلى
+ * "تحت الإنتاج" لو أُعيد فتح أحد البنود. هذا هو ما يجعل كارت الأوردر يغادر
+ * ممرات الإنتاج دون أن يسحبه أحد يدويًا.
+ *
+ * انتهاء البنود يعني انتهاء الطباعة لا انتهاء الأوردر، فمحطته التالية هي
+ * "ما بعد الطباعة"، ومنها يُسحَب يدويًا إلى الاكتمال بعد التشطيب.
  *
  * ملاحظة: الحساب يتم على كل البنود وليس فقط ما يراه المستخدم الحالي، وإلا
- * لاعتبر عامل الأوفست الأوردر مكتملًا بمجرد انتهاء بنده.
+ * لاعتبر عامل الأوفست الأوردر منتهيًا بمجرد انتهاء بنده.
  */
 export async function syncOrderStageWithItems(
   orderId: string,
@@ -73,30 +81,35 @@ export async function syncOrderStageWithItems(
   });
 
   if (!order || order.items.length === 0) return null;
-  if (order.stage !== 'production' && order.stage !== 'completed') return null;
+
+  // البند لا يُسحَب إلا والأوردر في الإنتاج، لكن إعادة فتحه من صفحة الأوردر
+  // ممكنة بعد مغادرته، فنرجّعه للإنتاج من أي مرحلة تالية لم تتجاوز الاكتمال.
+  const SYNCED_STAGES: string[] = ['production', ITEMS_DONE_STAGE, 'completed'];
+  if (!SYNCED_STAGES.includes(order.stage)) return null;
 
   const allDone = order.items.every((item) => item.status === 'done');
+  const doneLabel = ORDER_STAGE_LABELS[ITEMS_DONE_STAGE];
 
   if (allDone && order.stage === 'production') {
-    await prisma.order.update({ where: { id: orderId }, data: { stage: 'completed' } });
+    await prisma.order.update({ where: { id: orderId }, data: { stage: ITEMS_DONE_STAGE } });
     await logActivity({
       orderId,
       userId: actorId,
       action: 'auto_completed',
       fromStage: 'production',
-      toStage: 'completed',
-      details: 'اكتملت جميع بنود الأوردر فانتقل تلقائيًا إلى عمود الاكتمال',
+      toStage: ITEMS_DONE_STAGE,
+      details: `اكتملت جميع بنود الأوردر فانتقل تلقائيًا إلى عمود ${doneLabel}`,
     });
-    return 'completed';
+    return ITEMS_DONE_STAGE;
   }
 
-  if (!allDone && order.stage === 'completed') {
+  if (!allDone && order.stage !== 'production') {
     await prisma.order.update({ where: { id: orderId }, data: { stage: 'production' } });
     await logActivity({
       orderId,
       userId: actorId,
       action: 'auto_reopened',
-      fromStage: 'completed',
+      fromStage: order.stage,
       toStage: 'production',
       details: 'أُعيد فتح أحد البنود فرجع الأوردر إلى الإنتاج',
     });

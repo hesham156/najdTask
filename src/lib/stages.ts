@@ -168,6 +168,15 @@ export function isOrderStage(value: string): value is OrderStage {
   return (ORDER_STAGES as readonly string[]).includes(value);
 }
 
+/**
+ * المرحلة التي ينتقل إليها الأوردر تلقائيًا بمجرد انتهاء كل بنوده، وهي نفسها
+ * العمود الذي يُفلَت عليه كارت البند ليُعلَّم كمنتهٍ.
+ *
+ * تغييرها هنا يغيّرها في كل مكان: المزامنة التلقائية، وإفلات كروت البنود،
+ * وقائمة "نقل إلى"، ومنع النقل اليدوي إليها من الإنتاج.
+ */
+export const ITEMS_DONE_STAGE: OrderStage = 'postpress';
+
 // ──────────────────────────── أعمدة لوحة الكانبان ────────────────────────────
 
 export type BoardColumn = {
@@ -248,7 +257,7 @@ export const BOARD_COLUMNS: BoardColumn[] = [
     stage: 'postpress',
     accent: 'bg-indigo-500',
     headerBg: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    hint: 'تشطيبات ما بعد الطباعة — يُسحَب إليه الأوردر يدويًا',
+    hint: 'يصله الأوردر تلقائيًا بعد انتهاء كل بنوده — تشطيبات ما بعد الطباعة',
   },
   {
     key: 'completed',
@@ -257,7 +266,7 @@ export const BOARD_COLUMNS: BoardColumn[] = [
     stage: 'completed',
     accent: 'bg-teal-600',
     headerBg: 'bg-teal-50 text-teal-700 border-teal-200',
-    hint: 'أوردرات اكتملت كل بنودها',
+    hint: 'أوردرات خلص تشطيبها — تُسحَب إليه من "ما بعد الطباعة"',
   },
   {
     key: 'review',
@@ -295,16 +304,14 @@ export function columnForStage(stage: string): BoardColumn | undefined {
 /**
  * من أي مرحلة إلى أي مرحلة يُسمح بنقل كارت الأوردر.
  *
- * ملاحظتان:
- *  - الانتقال من production إلى completed لا يتم بالسحب، بل تلقائيًا عندما
- *    تنتهي كل بنود الأوردر.
- *  - postpress مرحلة يدوية بالكامل: تُدخَل بالسحب من الإنتاج أو رجوعًا من
- *    الاكتمال، وتُغادَر بالسحب. لا شيء ينقل الأوردر إليها أو منها تلقائيًا.
+ * ملاحظة: الانتقال من production إلى postpress لا يتم بالسحب، بل تلقائيًا
+ * عندما تنتهي كل بنود الأوردر (انظر ITEMS_DONE_STAGE). ومن هناك يُسحَب
+ * الأوردر يدويًا إلى الاكتمال بعد انتهاء التشطيب.
  */
 export const ALLOWED_ORDER_TRANSITIONS: Record<OrderStage, OrderStage[]> = {
   orders: ['design', 'production'],
   design: ['orders', 'production'],
-  production: ['design', 'postpress'],
+  production: ['design'],
   postpress: ['production', 'completed'],
   completed: ['review', 'production', 'postpress'],
   review: ['completed', 'invoice', 'design'],

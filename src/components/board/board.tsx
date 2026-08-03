@@ -30,6 +30,7 @@ import toast from 'react-hot-toast';
 import { apiGet, apiPatch, apiPost } from '@/lib/client';
 import { cn } from '@/lib/utils';
 import {
+  ITEMS_DONE_STAGE,
   ORDER_STAGE_LABELS,
   canTransition,
   getColumn,
@@ -580,8 +581,8 @@ function moveTargets(
       const meta = getColumn(column.key);
       if (!meta || meta.kind !== 'order' || !meta.stage) continue;
       if (meta.stage === from) continue;
-      // الاكتمال يحدث تلقائيًا بعد انتهاء كل البنود، لا بالنقل اليدوي
-      if (meta.stage === 'completed' && from === 'production') continue;
+      // مغادرة الإنتاج تحدث تلقائيًا بعد انتهاء كل البنود، لا بالنقل اليدوي
+      if (meta.stage === ITEMS_DONE_STAGE && from === 'production') continue;
       if (!canTransition(from, meta.stage)) continue;
       targets.push({ key: column.key, label: column.label });
     }
@@ -605,9 +606,9 @@ function moveTargets(
 
   const targets: MoveTarget[] = [];
 
-  const completed = columns.find((column) => getColumn(column.key)?.stage === 'completed');
-  if (completed && card.status !== 'done') {
-    targets.push({ key: completed.key, label: completed.label, hint: 'يعلّم البند كمنتهٍ' });
+  const doneColumn = columns.find((column) => getColumn(column.key)?.stage === ITEMS_DONE_STAGE);
+  if (doneColumn && card.status !== 'done') {
+    targets.push({ key: doneColumn.key, label: doneColumn.label, hint: 'يعلّم البند كمنتهٍ' });
   }
 
   if (can('items.edit')) {

@@ -9,7 +9,13 @@ import {
   logActivity,
   syncOrderStageWithItems,
 } from '@/lib/orders';
-import { PRODUCTION_TYPE_LABELS, getColumn, type ProductionType } from '@/lib/stages';
+import {
+  ITEMS_DONE_STAGE,
+  ORDER_STAGE_LABELS,
+  PRODUCTION_TYPE_LABELS,
+  getColumn,
+  type ProductionType,
+} from '@/lib/stages';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,9 +28,12 @@ const schema = z.object({
  * ينقل كارت بند الشغل.
  *
  * الحالات الممكنة:
- *  - إفلات على عمود "الاكتمال"     → البند خلص (status = done)
- *  - إفلات على نفس عموده           → إعادة ترتيب، ولو كان منتهيًا يُعاد فتحه
- *  - إفلات على عمود إنتاج آخر      → تحويل نوع الشغل (يحتاج صلاحية تعديل البنود)
+ *  - إفلات على عمود ITEMS_DONE_STAGE → البند خلص (status = done)
+ *  - إفلات على نفس عموده             → إعادة ترتيب، ولو كان منتهيًا يُعاد فتحه
+ *  - إفلات على عمود إنتاج آخر        → تحويل نوع الشغل (يحتاج صلاحية تعديل البنود)
+ *
+ * عمود الإنهاء هو العمود التالي مباشرةً لممرات الإنتاج، وهو نفسه الذي ينتقل
+ * إليه الأوردر تلقائيًا حين تنتهي كل بنوده.
  */
 export const POST = route(async (request: Request, { params }: { params: { id: string } }) => {
   const user = await requireUser();
@@ -43,7 +52,7 @@ export const POST = route(async (request: Request, { params }: { params: { id: s
   }
 
   // ── إنهاء البند ──
-  if (column.kind === 'order' && column.stage === 'completed') {
+  if (column.kind === 'order' && column.stage === ITEMS_DONE_STAGE) {
     if (item.status === 'done') return ok({ item, moved: false });
 
     const updated = await prisma.orderItem.update({
@@ -64,7 +73,7 @@ export const POST = route(async (request: Request, { params }: { params: { id: s
   if (column.kind !== 'item' || !column.productionType) {
     throw new ApiError(
       400,
-      'بنود الشغل تتحرك بين أعمدة الإنتاج أو إلى عمود الاكتمال فقط',
+      `بنود الشغل تتحرك بين أعمدة الإنتاج أو إلى عمود "${ORDER_STAGE_LABELS[ITEMS_DONE_STAGE]}" فقط`,
     );
   }
 
