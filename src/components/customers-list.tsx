@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClipboardList, Phone, Plus, Search, UsersRound } from 'lucide-react';
+import { Check, ClipboardList, Pencil, Phone, Plus, Search, Trash2, UsersRound } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { apiGet, apiPost } from '@/lib/client';
+import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/client';
 import { cn, formatDate } from '@/lib/utils';
 import {
   ORDER_STAGE_LABELS,
@@ -16,7 +16,7 @@ import {
   type Priority,
 } from '@/lib/stages';
 import { usePermissions } from '@/components/session';
-import { EmptyState, Field, Modal, PageLoader, Spinner } from '@/components/ui';
+import { ConfirmDialog, EmptyState, Field, Modal, PageLoader, Spinner } from '@/components/ui';
 
 type Customer = {
   id: string;
@@ -28,10 +28,15 @@ type Customer = {
 };
 
 export function CustomersList() {
+  const queryClient = useQueryClient();
   const { can } = usePermissions();
+  const manage = can('customers.manage');
+
   const [search, setSearch] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
+  /** null = مغلقة، 'new' = إضافة، وإلا العميل الجاري تعديله */
+  const [form, setForm] = useState<Customer | 'new' | null>(null);
   const [ordersOf, setOrdersOf] = useState<Customer | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Customer | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['customers', search],
@@ -41,14 +46,29 @@ export function CustomersList() {
       ),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (customer: Customer) => apiDelete(`/api/customers/${customer.id}`),
+    onSuccess: () => {
+      toast.success('تم حذف العميل');
+      setConfirmDelete(null);
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      // أوردرات العميل المحذوف فقدت ارتباطها، فأي نتائج محفوظة لم تعد صحيحة
+      queryClient.invalidateQueries({ queryKey: ['customer-orders'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+      setConfirmDelete(null);
+    },
+  });
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl p-4 sm:p-6">
         <header className="mb-4 flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-bold text-slate-900">العملاء</h1>
           <div className="flex-1" />
-          {can('customers.manage') ? (
-            <button type="button" className="btn-primary" onClick={() => setCreateOpen(true)}>
+          {manage ? (
+            <button type="button" className="btn-primary" onClick={() => setForm('new')}>
               <Plus className="h-4 w-4" />
               عميل جديد
             </button>
@@ -101,24 +121,63 @@ export function CustomersList() {
                   </div>
                 </div>
 
-                {can('orders.view') ? (
-                  <button
-                    type="button"
-                    className="btn-secondary shrink-0 !py-1.5 !text-xs"
-                    onClick={() => setOrdersOf(customer)}
-                  >
-                    <ClipboardList className="h-3.5 w-3.5" />
-                    أوردراته
-                  </button>
-                ) : null}
+                <div className="flex shrink-0 items-center gap-1">
+                  {can('orders.view') ? (
+                    <button
+                      type="button"
+                      className="btn-secondary !py-1.5 !text-xs"
+                      onClick={() => setOrdersOf(customer)}
+                    >
+                      <ClipboardList className="h-3.5 w-3.5" />
+                      أوردراته
+                    </button>
+                  ) : null}
+
+                  {manage ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-ghost h-8 w-8 !px-0 text-slate-400 hover:text-brand-700"
+                        onClick={() => setForm(customer)}
+                        aria-label={`تعديل ${customer.name}`}
+                        title="تعديل"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost h-8 w-8 !px-0 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                        onClick={() => setConfirmDelete(customer)}
+                        aria-label={`حذف ${customer.name}`}
+                        title="حذف"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <CreateCustomerModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CustomerFormModal target={form} onClose={() => setForm(null)} />
       <CustomerOrdersModal customer={ordersOf} onClose={() => setOrdersOf(null)} />
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        title={`حذف ${confirmDelete?.name ?? 'العميل'}`}
+        message={
+          confirmDelete && confirmDelete._count.orders > 0
+            ? `سيُحذف سجل العميل نهائيًا. أوردراته الـ ${confirmDelete._count.orders} لن تُحذف ويبقى اسمه مكتوبًا عليها، لكنها ستفقد ارتباطها به فلن تظهر في "أوردراته" بعد الآن.`
+            : 'سيُحذف سجل العميل نهائيًا. هل أنت متأكد؟'
+        }
+        confirmLabel="حذف"
+        loading={deleteMutation.isPending}
+        onConfirm={() => confirmDelete && deleteMutation.mutate(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }
@@ -324,58 +383,109 @@ function CustomerOrdersModal({
   );
 }
 
-// ─────────────────────────────── إضافة عميل ───────────────────────────────
+// ─────────────────────────── إضافة عميل أو تعديله ───────────────────────────
 
-function CreateCustomerModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * نموذج واحد للحالتين: `target` يساوي 'new' للإضافة، أو العميل نفسه للتعديل.
+ * الحقول تُملأ من العميل عند فتح النافذة عليه، وتُفرَّغ عند الإضافة — لذلك
+ * نستعمل `key` على المكوّن الداخلي بدل مزامنة الحالة يدويًا بـ useEffect.
+ */
+function CustomerFormModal({
+  target,
+  onClose,
+}: {
+  target: Customer | 'new' | null;
+  onClose: () => void;
+}) {
+  if (!target) return null;
+  const editing = target === 'new' ? null : target;
+  // الـ key يعيد بناء النموذج بحقول العميل الجديد بدل مزامنتها بـ useEffect
+  return <CustomerFormDialog key={editing?.id ?? 'new'} customer={editing} onDone={onClose} />;
+}
+
+function CustomerFormDialog({
+  customer,
+  onDone,
+}: {
+  customer: Customer | null;
+  onDone: () => void;
+}) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [company, setCompany] = useState('');
+  const [name, setName] = useState(customer?.name ?? '');
+  const [phone, setPhone] = useState(customer?.phone ?? '');
+  const [company, setCompany] = useState(customer?.company ?? '');
 
   const mutation = useMutation({
-    mutationFn: () =>
-      apiPost('/api/customers', {
+    mutationFn: () => {
+      const body = {
         name: name.trim(),
         phone: phone.trim() || null,
         company: company.trim() || null,
-      }),
+      };
+      return customer
+        ? apiPatch(`/api/customers/${customer.id}`, body)
+        : apiPost('/api/customers', body);
+    },
     onSuccess: () => {
-      toast.success('تمت إضافة العميل');
-      setName('');
-      setPhone('');
-      setCompany('');
+      toast.success(customer ? 'تم حفظ بيانات العميل' : 'تمت إضافة العميل');
       queryClient.invalidateQueries({ queryKey: ['customers'] });
-      onClose();
+      onDone();
     },
     onError: (error: Error) => toast.error(error.message),
   });
 
   return (
     <Modal
-      open={open}
-      onClose={onClose}
-      title="عميل جديد"
+      open
+      onClose={() => {
+        if (!mutation.isPending) onDone();
+      }}
+      title={customer ? `تعديل ${customer.name}` : 'عميل جديد'}
       size="sm"
       footer={
         <>
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={onDone}
+            disabled={mutation.isPending}
+          >
             إلغاء
           </button>
           <button
-            type="button"
+            type="submit"
+            form="customer-form"
             className="btn-primary"
             disabled={mutation.isPending || !name.trim()}
-            onClick={() => mutation.mutate()}
           >
-            {mutation.isPending ? <Spinner /> : <Plus className="h-4 w-4" />}
-            إضافة
+            {mutation.isPending ? (
+              <Spinner />
+            ) : customer ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            {customer ? 'حفظ' : 'إضافة'}
           </button>
         </>
       }
     >
-      <div className="space-y-3">
+      <form
+        id="customer-form"
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!name.trim()) return toast.error('اكتب اسم العميل');
+          mutation.mutate();
+        }}
+      >
         <Field label="اسم العميل" required>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
         </Field>
         <Field label="التليفون">
           <input
@@ -388,7 +498,14 @@ function CreateCustomerModal({ open, onClose }: { open: boolean; onClose: () => 
         <Field label="الشركة">
           <input className="input" value={company} onChange={(e) => setCompany(e.target.value)} />
         </Field>
-      </div>
+
+        {customer ? (
+          <p className="text-xs text-slate-500">
+            تغيير الاسم هنا لا يغيّر اسم العميل المكتوب على أوردراته السابقة — كل أوردر يحتفظ
+            بنسخة الاسم وقت إنشائه.
+          </p>
+        ) : null}
+      </form>
     </Modal>
   );
 }
