@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Check,
@@ -116,8 +117,18 @@ type OrderDetailData = {
 
 // ─────────────────────────────── المكوّن الرئيسي ───────────────────────────────
 
-export function OrderDetail({ orderId }: { orderId: string }) {
+type DeleteTarget = { kind: 'order' | 'item' | 'file'; id: string };
+
+export function OrderDetail({
+  orderId,
+  /** يُستدعى بعد حذف الأوردر — النافذة تمرّره لتغلق نفسها. بدونه نرجع لقائمة الأوردرات. */
+  onDeleted,
+}: {
+  orderId: string;
+  onDeleted?: () => void;
+}) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { can, canSeeProductionType } = usePermissions();
 
   const { data, isLoading, error } = useQuery({
@@ -126,9 +137,7 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   });
 
   const [editing, setEditing] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'item' | 'file'; id: string } | null>(
-    null,
-  );
+  const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ['order', orderId] });
@@ -144,11 +153,27 @@ export function OrderDetail({ orderId }: { orderId: string }) {
   });
 
   const removeMutation = useMutation({
-    mutationFn: ({ kind, id }: { kind: 'item' | 'file'; id: string }) =>
-      kind === 'item' ? apiDelete(`/api/items/${id}`) : apiDelete(`/api/files/${id}`),
-    onSuccess: () => {
-      toast.success('تم الحذف');
+    mutationFn: ({ kind, id }: DeleteTarget) => {
+      if (kind === 'item') return apiDelete(`/api/items/${id}`);
+      if (kind === 'file') return apiDelete(`/api/files/${id}`);
+      return apiDelete(`/api/orders/${id}`);
+    },
+    onSuccess: (_result, target) => {
       setConfirmDelete(null);
+
+      if (target.kind === 'order') {
+        toast.success('تم حذف الأوردر');
+        // لا نحدّث استعلام أوردر لم يعد موجودًا — نسقطه ونغادر الشاشة
+        queryClient.removeQueries({ queryKey: ['order', orderId] });
+        queryClient.invalidateQueries({ queryKey: ['board'] });
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+        if (onDeleted) onDeleted();
+        else router.push('/orders');
+        return;
+      }
+
+      toast.success('تم الحذف');
       refresh();
     },
     onError: (e: Error) => {
@@ -204,16 +229,25 @@ export function OrderDetail({ orderId }: { orderId: string }) {
           </div>
         </div>
 
-        {can('orders.edit') ? (
-          <button
-            type="button"
-            className="btn-secondary shrink-0"
-            onClick={() => setEditing((v) => !v)}
-          >
-            <Pencil className="h-4 w-4" />
-            {editing ? 'إلغاء التعديل' : 'تعديل'}
-          </button>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {can('orders.edit') ? (
+            <button type="button" className="btn-secondary" onClick={() => setEditing((v) => !v)}>
+              <Pencil className="h-4 w-4" />
+              {editing ? 'إلغاء التعديل' : 'تعديل'}
+            </button>
+          ) : null}
+
+          {can('orders.delete') ? (
+            <button
+              type="button"
+              className="btn-ghost text-slate-400 hover:bg-red-50 hover:text-red-600"
+              onClick={() => setConfirmDelete({ kind: 'order', id: order.id })}
+            >
+              <Trash2 className="h-4 w-4" />
+              حذف الأوردر
+            </button>
+          ) : null}
+        </div>
       </header>
 
       {editing ? (
@@ -317,11 +351,19 @@ export function OrderDetail({ orderId }: { orderId: string }) {
 
       <ConfirmDialog
         open={confirmDelete !== null}
-        title={confirmDelete?.kind === 'item' ? 'حذف بند الشغل' : 'حذف الملف'}
+        title={
+          confirmDelete?.kind === 'order'
+            ? `حذف الأوردر ${orderNumberPrefix}${order.number}`
+            : confirmDelete?.kind === 'item'
+              ? 'حذف بند الشغل'
+              : 'حذف الملف'
+        }
         message={
-          confirmDelete?.kind === 'item'
-            ? 'سيتم حذف البند وكل مرفقاته نهائيًا. هل أنت متأكد؟'
-            : 'سيتم حذف الملف نهائيًا. هل أنت متأكد؟'
+          confirmDelete?.kind === 'order'
+            ? `سيتم حذف أوردر ${order.customerName} وكل بنوده وملفاته وتعليقاته وسجل نشاطه نهائيًا. لا يمكن التراجع عن هذا الإجراء.`
+            : confirmDelete?.kind === 'item'
+              ? 'سيتم حذف البند وكل مرفقاته نهائيًا. هل أنت متأكد؟'
+              : 'سيتم حذف الملف نهائيًا. هل أنت متأكد؟'
         }
         confirmLabel="حذف"
         loading={removeMutation.isPending}

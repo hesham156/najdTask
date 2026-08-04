@@ -33,7 +33,7 @@ export function OrderDetailModal({
         ) : null
       }
     >
-      {orderId ? <OrderDetail orderId={orderId} /> : null}
+      {orderId ? <OrderDetail orderId={orderId} onDeleted={onClose} /> : null}
     </Modal>
   );
 }
