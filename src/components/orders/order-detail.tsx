@@ -13,6 +13,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  Printer,
   Receipt,
   Send,
   Trash2,
@@ -21,6 +22,7 @@ import {
 import toast from 'react-hot-toast';
 
 import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/client';
+import { printOrder } from '@/lib/print-order';
 import { cn, formatBytes, formatDate, formatDateTime, timeAgo } from '@/lib/utils';
 import {
   ITEM_OPTIONS,
@@ -230,6 +232,18 @@ export function OrderDetail({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              const ok = printOrder(order, orderNumberPrefix);
+              if (!ok) toast.error('فعّل النوافذ المنبثقة للطباعة');
+            }}
+          >
+            <Printer className="h-4 w-4" />
+            طباعة
+          </button>
+
           {can('orders.edit') ? (
             <button type="button" className="btn-secondary" onClick={() => setEditing((v) => !v)}>
               <Pencil className="h-4 w-4" />
