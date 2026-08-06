@@ -100,6 +100,7 @@ const FINISHING_OPTIONS: ItemOption[] = [
   { key: 'cello_gloss', label: 'سلفان لميع' },
   { key: 'cello_matte', label: 'سلفان مطفي' },
   { key: 'creasing', label: 'تكسير' },
+  { key: 'guillotine_cut', label: 'قص مجيب' },
 ];
 
 const INDOOR_OPTIONS: ItemOption[] = [
