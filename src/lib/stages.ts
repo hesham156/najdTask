@@ -116,6 +116,10 @@ const INDOOR_OPTIONS: ItemOption[] = [
   { key: 'gz_320', label: 'GZ 320' },
   { key: 'epson', label: 'Epson' },
   { key: 'lamination', label: 'Lamination' },
+  { key: 'lamination', label: 'Lamination' },
+  { key: 'clear_chinese', label: 'شفاف صيني' },
+  { key: 'clear_orajet', label: 'شفاف اورجت' },
+  { key: 'lamination_gloss', label: 'لامنيشن لامع' },
 ];
 
 export const ITEM_OPTIONS: Record<ProductionType, ItemOption[]> = {
