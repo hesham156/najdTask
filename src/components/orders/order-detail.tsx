@@ -97,6 +97,7 @@ type OrderDetailData = {
     number: number;
     description: string | null;
     customerName: string;
+    customerId: string | null;
     stage: OrderStage;
     priority: Priority;
     dueDate: string | null;
@@ -795,15 +796,26 @@ function EditOrderForm({
   order: OrderDetailData['order'];
   onDone: () => void;
 }) {
-  const [customerName, setCustomerName] = useState(order.customerName);
+  const [customerId, setCustomerId] = useState(order.customerId ?? '');
   const [description, setDescription] = useState(order.description ?? '');
   const [priority, setPriority] = useState<Priority>(order.priority);
   const [dueDate, setDueDate] = useState(order.dueDate ? order.dueDate.slice(0, 10) : '');
 
+  const { data: customersData } = useQuery({
+    queryKey: ['customers', 'options'],
+    queryFn: () =>
+      apiGet<{ customers: { id: string; name: string; phone: string | null }[] }>('/api/customers'),
+  });
+  const customers = customersData?.customers ?? [];
+  // لو عميل الأوردر الحالي غير موجود في أول 50 اسمًا نضيفه حتى يبقى مختارًا
+  const showCurrentFallback =
+    !!order.customerId && !customers.some((c) => c.id === order.customerId);
+
   const mutation = useMutation({
     mutationFn: () =>
       apiPatch(`/api/orders/${order.id}`, {
-        customerName: customerName.trim(),
+        // نرسل customerId فقط عند اختيار عميل فعلي، فينتقل الأوردر إليه
+        ...(customerId ? { customerId } : {}),
         description: description.trim() || null,
         priority,
         dueDate: dueDate ? new Date(`${dueDate}T12:00:00`).toISOString() : null,
@@ -823,12 +835,27 @@ function EditOrderForm({
         mutation.mutate();
       }}
     >
-      <Field label="اسم العميل">
-        <input
+      <Field label="العميل">
+        <select
           className="input"
-          value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
-        />
+          value={customerId}
+          onChange={(e) => setCustomerId(e.target.value)}
+        >
+          {showCurrentFallback ? (
+            <option value={order.customerId!}>{order.customerName}</option>
+          ) : null}
+          {!order.customerId ? (
+            <option value="" disabled>
+              اختر العميل — الحالي: {order.customerName}
+            </option>
+          ) : null}
+          {customers.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.name}
+              {customer.phone ? ` — ${customer.phone}` : ''}
+            </option>
+          ))}
+        </select>
       </Field>
 
       <Field label="الأولوية">

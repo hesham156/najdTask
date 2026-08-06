@@ -83,6 +83,8 @@ export const GET = route(async (_request: Request, { params }: Params) => {
 const updateSchema = z.object({
   description: z.string().trim().max(4000).nullable().optional(),
   customerName: z.string().trim().min(1).max(160).optional(),
+  // اختيار عميل موجود لنقل الأوردر إليه — عند إرساله نأخذ اسمه الرسمي أيضًا
+  customerId: z.string().trim().min(1).nullable().optional(),
   priority: z.enum(PRIORITIES).optional(),
   dueDate: z.string().datetime().nullable().optional(),
   // حقول الفاتورة وسند التسليم — تحتاج صلاحية invoice.manage
@@ -118,11 +120,31 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
     throw forbidden('تعديل الأوردر');
   }
 
+  // نقل الأوردر إلى عميل موجود: نتحقق أنه موجود ونأخذ اسمه الرسمي معه
+  let customerLink: { customerId: string; customerName: string } | undefined;
+  if (body.customerId) {
+    const customer = await prisma.customer.findUnique({
+      where: { id: body.customerId },
+      select: { id: true, name: true },
+    });
+    if (!customer) throw notFound('العميل');
+    customerLink = { customerId: customer.id, customerName: customer.name };
+  }
+  const movedCustomer = !!customerLink && customerLink.customerId !== order.customerId;
+
   const updated = await prisma.order.update({
     where: { id: params.id },
     data: {
       ...(body.description !== undefined ? { description: body.description } : {}),
-      ...(body.customerName !== undefined ? { customerName: body.customerName } : {}),
+      // العميل المختار من القائمة يغلب على الاسم المكتوب يدويًا
+      ...(customerLink
+        ? { customerId: customerLink.customerId, customerName: customerLink.customerName }
+        : body.customerId === null
+          ? { customerId: null }
+          : {}),
+      ...(body.customerName !== undefined && !customerLink
+        ? { customerName: body.customerName }
+        : {}),
       ...(body.priority !== undefined ? { priority: body.priority } : {}),
       ...(body.dueDate !== undefined
         ? { dueDate: body.dueDate ? new Date(body.dueDate) : null }
@@ -141,7 +163,12 @@ export const PATCH = route(async (request: Request, { params }: Params) => {
     orderId: order.id,
     userId: user.id,
     action: touchesInvoice && !touchesOrder ? 'invoice_updated' : 'updated',
-    details: touchesInvoice && !touchesOrder ? 'حدّث بيانات الفاتورة/التسليم' : 'عدّل بيانات الأوردر',
+    details:
+      touchesInvoice && !touchesOrder
+        ? 'حدّث بيانات الفاتورة/التسليم'
+        : movedCustomer
+          ? `عدّل الأوردر ونقله إلى العميل ${customerLink!.customerName}`
+          : 'عدّل بيانات الأوردر',
   });
 
   return ok({ order: updated });

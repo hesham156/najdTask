@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic';
 
 export const GET = route(async (request: Request) => {
   const user = await requireUser();
-  if (!can(user, 'customers.view') && !can(user, 'orders.create')) {
+  // من يقدر ينشئ أوردرًا أو يعدّله يحتاج قائمة العملاء ليختار منها عند الربط
+  if (!can(user, 'customers.view') && !can(user, 'orders.create') && !can(user, 'orders.edit')) {
     throw forbidden('عرض العملاء');
   }
 
