@@ -41,7 +41,8 @@ export const GET = route(async (request: Request) => {
     order: orderWhere,
   };
 
-  const [byStage, byType, totals, lateOrders, topCustomers, byConsumption] = await Promise.all([
+  const [byStage, byType, totals, paidTotals, lateOrders, topCustomers, byConsumption, workloadRows] =
+    await Promise.all([
     prisma.order.groupBy({
       by: ['stage'],
       where: orderWhere,
@@ -55,6 +56,11 @@ export const GET = route(async (request: Request) => {
     prisma.order.aggregate({
       where: orderWhere,
       _count: { _all: true },
+      _sum: { invoiceAmount: true },
+    }),
+    // التحصيل: مجموع الفواتير المحصَّلة فقط — الباقي متبقٍّ على العملاء
+    prisma.order.aggregate({
+      where: { ...orderWhere, invoicePaid: true },
       _sum: { invoiceAmount: true },
     }),
     prisma.order.count({
@@ -79,7 +85,45 @@ export const GET = route(async (request: Request) => {
       _sum: { consumedQty: true },
       _count: { _all: true },
     }),
+    // توزيع الشغل: بنود كل عامل حسب حالتها — لا نحسب البنود غير المسندة
+    prisma.orderItem.groupBy({
+      by: ['assigneeId', 'status'],
+      where: { ...itemWhere, assigneeId: { not: null } },
+      _count: { _all: true },
+    }),
   ]);
+
+  // أسماء العمّال المسند إليهم شغل في الفترة (groupBy يعيد المعرّفات فقط)
+  const assigneeIds = [
+    ...new Set(workloadRows.map((r) => r.assigneeId).filter((id): id is string => !!id)),
+  ];
+  const assignees = assigneeIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: assigneeIds } },
+        select: { id: true, name: true },
+      })
+    : [];
+  const nameById = new Map(assignees.map((u) => [u.id, u.name]));
+
+  const workload = assigneeIds
+    .map((id) => {
+      const rows = workloadRows.filter((r) => r.assigneeId === id);
+      const sum = (status: string) => rows.find((r) => r.status === status)?._count._all ?? 0;
+      const pending = sum('pending');
+      const inProgress = sum('in_progress');
+      const done = sum('done');
+      return {
+        id,
+        name: nameById.get(id) ?? '—',
+        pending,
+        inProgress,
+        done,
+        active: pending + inProgress, // الحمل الجاري = ما لم يكتمل بعد
+        total: pending + inProgress + done,
+      };
+    })
+    // الأكثر حملًا جاريًا في الأعلى
+    .sort((a, b) => b.active - a.active || b.total - a.total);
 
   const stageCounts = Object.keys(ORDER_STAGE_LABELS).map((stage) => ({
     stage,
@@ -133,9 +177,12 @@ export const GET = route(async (request: Request) => {
     periods: PERIODS.map((p) => ({ days: p.days, label: p.label })),
     totalOrders: totals._count._all,
     totalInvoiced: totals._sum.invoiceAmount ?? 0,
+    totalCollected: paidTotals._sum.invoiceAmount ?? 0,
+    totalOutstanding: (totals._sum.invoiceAmount ?? 0) - (paidTotals._sum.invoiceAmount ?? 0),
     lateOrders,
     stageCounts,
     typeCounts,
+    workload,
     consumption: {
       totalSheets: Math.round(unitTotal('sheet') * 100) / 100,
       totalMeters: Math.round(unitTotal('meter') * 100) / 100,

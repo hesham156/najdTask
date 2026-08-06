@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ClipboardList, Receipt } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Receipt, Users } from 'lucide-react';
 
 import { apiGet } from '@/lib/client';
 import { cn } from '@/lib/utils';
@@ -15,8 +15,19 @@ type ReportData = {
   periods: { days: number; label: string }[];
   totalOrders: number;
   totalInvoiced: number;
+  totalCollected: number;
+  totalOutstanding: number;
   lateOrders: number;
   stageCounts: { stage: string; label: string; count: number }[];
+  workload: {
+    id: string;
+    name: string;
+    pending: number;
+    inProgress: number;
+    done: number;
+    active: number;
+    total: number;
+  }[];
   typeCounts: {
     type: string;
     label: string;
@@ -109,6 +120,60 @@ export function ReportsView() {
           />
         </div>
 
+        {/* التحصيل المالي */}
+        <section className="card mb-5 p-4">
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">التحصيل المالي</h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-500">إجمالي الفواتير</p>
+              <p className="num text-xl font-bold text-slate-900">{num(data.totalInvoiced)}</p>
+            </div>
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+              <p className="text-xs text-green-700">محصّل</p>
+              <p className="num text-xl font-bold text-green-700">{num(data.totalCollected)}</p>
+            </div>
+            <div
+              className={cn(
+                'rounded-lg border p-3',
+                data.totalOutstanding > 0
+                  ? 'border-amber-200 bg-amber-50'
+                  : 'border-slate-200 bg-slate-50',
+              )}
+            >
+              <p
+                className={cn('text-xs', data.totalOutstanding > 0 ? 'text-amber-700' : 'text-slate-500')}
+              >
+                متبقّي على العملاء
+              </p>
+              <p
+                className={cn(
+                  'num text-xl font-bold',
+                  data.totalOutstanding > 0 ? 'text-amber-700' : 'text-slate-900',
+                )}
+              >
+                {num(data.totalOutstanding)}
+              </p>
+            </div>
+          </div>
+          {/* شريط نسبة التحصيل */}
+          {data.totalInvoiced > 0 ? (
+            <div className="mt-3">
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-green-500"
+                  style={{ width: `${(data.totalCollected / data.totalInvoiced) * 100}%` }}
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                نسبة التحصيل{' '}
+                <span className="num font-semibold text-slate-700">
+                  {Math.round((data.totalCollected / data.totalInvoiced) * 100)}%
+                </span>
+              </p>
+            </div>
+          ) : null}
+        </section>
+
         {/* توزيع المراحل */}
         <section className="card mb-4 p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-800">الأوردرات حسب المرحلة</h2>
@@ -159,6 +224,57 @@ export function ReportsView() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        {/* توزيع الشغل على العمّال */}
+        <section className="card mb-4 p-4">
+          <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
+            <Users className="h-4 w-4 text-slate-400" />
+            توزيع الشغل على العمّال
+          </h2>
+          {data.workload.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500">
+              لا توجد بنود مُسنَدة لعمّال في هذه الفترة
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs text-slate-500">
+                  <tr>
+                    <th className="pb-2 text-start font-medium">العامل</th>
+                    <th className="pb-2 text-start font-medium">في الانتظار</th>
+                    <th className="pb-2 text-start font-medium">جاري التنفيذ</th>
+                    <th className="pb-2 text-start font-medium">تم</th>
+                    <th className="pb-2 text-start font-medium">الحمل الجاري</th>
+                    <th className="pb-2 text-start font-medium">الإجمالي</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.workload.map((worker) => (
+                    <tr key={worker.id}>
+                      <td className="py-2 font-medium text-slate-800">{worker.name}</td>
+                      <td className="num py-2 text-slate-600">{worker.pending}</td>
+                      <td className="num py-2 text-blue-700">{worker.inProgress}</td>
+                      <td className="num py-2 text-green-700">{worker.done}</td>
+                      <td className="num py-2">
+                        <span
+                          className={cn(
+                            'rounded-full px-2 py-0.5 text-xs font-bold',
+                            worker.active > 0
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-slate-100 text-slate-500',
+                          )}
+                        >
+                          {worker.active}
+                        </span>
+                      </td>
+                      <td className="num py-2 font-bold text-slate-800">{worker.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         {/* استهلاك الإنتاج */}
