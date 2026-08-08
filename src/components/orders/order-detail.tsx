@@ -140,6 +140,8 @@ export function OrderDetail({
   });
 
   const [editing, setEditing] = useState(false);
+  /** معرّف البند الجاري تعديله — صفّه يتحوّل إلى نموذج في مكانه */
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
 
   function refresh() {
@@ -287,19 +289,33 @@ export function OrderDetail({
         />
 
         <div className="space-y-2">
-          {order.items.map((item) => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              attachments={order.attachments.filter((a) => a.orderItemId === item.id)}
-              canChangeStatus={can('items.move')}
-              canDelete={can('items.delete')}
-              canDownload={can('files.download')}
-              busy={itemStatus.isPending}
-              onStatus={(status) => itemStatus.mutate({ id: item.id, status })}
-              onDelete={() => setConfirmDelete({ kind: 'item', id: item.id })}
-            />
-          ))}
+          {order.items.map((item) =>
+            editingItemId === item.id ? (
+              <EditItemForm
+                key={item.id}
+                item={item}
+                onDone={() => {
+                  setEditingItemId(null);
+                  refresh();
+                }}
+                onCancel={() => setEditingItemId(null)}
+              />
+            ) : (
+              <ItemRow
+                key={item.id}
+                item={item}
+                attachments={order.attachments.filter((a) => a.orderItemId === item.id)}
+                canChangeStatus={can('items.move')}
+                canEdit={can('items.edit')}
+                canDelete={can('items.delete')}
+                canDownload={can('files.download')}
+                busy={itemStatus.isPending}
+                onStatus={(status) => itemStatus.mutate({ id: item.id, status })}
+                onEdit={() => setEditingItemId(item.id)}
+                onDelete={() => setConfirmDelete({ kind: 'item', id: item.id })}
+              />
+            ),
+          )}
 
           {order.items.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-xs text-slate-500">
@@ -427,19 +443,23 @@ function ItemRow({
   item,
   attachments,
   canChangeStatus,
+  canEdit,
   canDelete,
   canDownload,
   busy,
   onStatus,
+  onEdit,
   onDelete,
 }: {
   item: DetailItem;
   attachments: DetailAttachment[];
   canChangeStatus: boolean;
+  canEdit: boolean;
   canDelete: boolean;
   canDownload: boolean;
   busy: boolean;
   onStatus: (status: ItemStatus) => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -515,12 +535,24 @@ function ItemRow({
             </button>
           ) : null}
 
+          {canEdit ? (
+            <button
+              type="button"
+              className="btn-ghost h-8 w-8 !px-0 text-slate-400 hover:text-brand-700"
+              onClick={onEdit}
+              aria-label={`تعديل ${item.title}`}
+              title="تعديل البند"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          ) : null}
+
           {canDelete ? (
             <button
               type="button"
               className="btn-ghost h-8 w-8 !px-0 text-slate-400 hover:text-red-600"
               onClick={onDelete}
-              aria-label="حذف البند"
+              aria-label={`حذف ${item.title}`}
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -781,6 +813,132 @@ function AddItemForm({ orderId, onAdded }: { orderId: string; onAdded: () => voi
           type="button"
           className="btn-ghost !py-1.5 !text-xs"
           onClick={() => setOpen(false)}
+        >
+          إلغاء
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * تعديل بند شغل قائم — يحل محل صفّ البند في مكانه بدل فتح نافذة، فيبقى باقي
+ * بنود الأوردر ظاهرًا أمام المستخدم أثناء التعديل.
+ *
+ * قائمة أنواع الشغل مقصورة على ما يراه المستخدم: الخادم يرفض تحويل البند إلى
+ * نوع خارج صلاحيته، فلا نعرض خيارًا سيُرفَض.
+ */
+function EditItemForm({
+  item,
+  onDone,
+  onCancel,
+}: {
+  item: DetailItem;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const { canSeeProductionType } = usePermissions();
+  const types = PRODUCTION_TYPES.filter(
+    (type) => canSeeProductionType(type) || type === item.productionType,
+  );
+
+  const [productionType, setProductionType] = useState<ProductionType>(item.productionType);
+  const [title, setTitle] = useState(item.title);
+  const [quantity, setQuantity] = useState(item.quantity);
+  const [specs, setSpecs] = useState(item.specs ?? '');
+  const [options, setOptions] = useState<string[]>(item.options);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      apiPatch(`/api/items/${item.id}`, {
+        productionType,
+        title: title.trim(),
+        quantity,
+        specs: specs.trim() || null,
+        options,
+      }),
+    onSuccess: () => {
+      toast.success('تم حفظ البند');
+      onDone();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <form
+      className="space-y-2 rounded-xl border border-brand-300 bg-brand-50/40 p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!title.trim()) return toast.error('اكتب اسم البند');
+        mutation.mutate();
+      }}
+    >
+      <div className="grid gap-2 sm:grid-cols-[7rem_1fr_5.5rem]">
+        <select
+          className="input !py-1.5 text-xs"
+          value={productionType}
+          onChange={(e) => {
+            const next = e.target.value as ProductionType;
+            setProductionType(next);
+            // خيارات النوع القديم لا تنطبق على الجديد
+            setOptions((prev) => sanitizeItemOptions(next, prev));
+          }}
+          aria-label="نوع الشغل"
+        >
+          {types.map((type) => (
+            <option key={type} value={type}>
+              {PRODUCTION_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </select>
+        <input
+          className="input !py-1.5 text-xs"
+          placeholder="اسم البند"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          aria-label="اسم البند"
+          autoFocus
+        />
+        <input
+          type="number"
+          min={1}
+          className="input !py-1.5 text-xs"
+          value={quantity}
+          onChange={(e) => setQuantity(Number(e.target.value) || 1)}
+          aria-label="الكمية"
+        />
+      </div>
+
+      <input
+        className="input !py-1.5 text-xs"
+        placeholder="المواصفات"
+        value={specs}
+        onChange={(e) => setSpecs(e.target.value)}
+        aria-label="المواصفات"
+      />
+
+      <div>
+        <p className="mb-1.5 text-[11px] font-medium text-slate-500">
+          خيارات {PRODUCTION_TYPE_LABELS[productionType]}
+        </p>
+        <OptionPicker
+          options={ITEM_OPTIONS[productionType] ?? []}
+          selected={options}
+          onChange={setOptions}
+          disabled={mutation.isPending}
+        />
+      </div>
+
+      <div className="flex gap-2">
+        <button type="submit" className="btn-primary !py-1.5 !text-xs" disabled={mutation.isPending}>
+          {mutation.isPending ? <Spinner /> : <Check className="h-3.5 w-3.5" />}
+          حفظ
+        </button>
+        <button
+          type="button"
+          className="btn-ghost !py-1.5 !text-xs"
+          onClick={onCancel}
+          disabled={mutation.isPending}
         >
           إلغاء
         </button>
