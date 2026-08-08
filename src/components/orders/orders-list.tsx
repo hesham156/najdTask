@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Plus, Search } from 'lucide-react';
+import { ClipboardList, Download, Plus, Search, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import { apiGet } from '@/lib/client';
+import { downloadBlob, exportOrdersToPdfZip } from '@/lib/export-orders-pdf';
+import type { PrintableOrder } from '@/lib/print-order';
 import { cn, formatDate } from '@/lib/utils';
 import {
   ORDER_STAGES,
@@ -18,7 +21,7 @@ import {
   type ProductionType,
 } from '@/lib/stages';
 import { usePermissions } from '@/components/session';
-import { EmptyState, PageLoader } from '@/components/ui';
+import { EmptyState, PageLoader, Spinner } from '@/components/ui';
 import { CreateOrderModal } from './create-order-modal';
 
 type ListOrder = {
@@ -39,20 +42,62 @@ export function OrdersList() {
   const { can } = usePermissions();
   const [search, setSearch] = useState('');
   const [stage, setStage] = useState('');
+  /** فلتر الفترة على تاريخ إنشاء الأوردر، بصيغة YYYY-MM-DD */
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
+
+  /** الفلاتر التي يشترك فيها العرض والتصدير، فيصدّر المستخدم ما يراه بالضبط */
+  const filters = {
+    ...(search ? { q: search } : {}),
+    ...(stage ? { stage } : {}),
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+  };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['orders', search, stage],
+    queryKey: ['orders', search, stage, from, to],
     queryFn: () =>
       apiGet<{ orders: ListOrder[]; total: number; orderNumberPrefix: string }>(
-        `/api/orders?${new URLSearchParams({
-          ...(search ? { q: search } : {}),
-          ...(stage ? { stage } : {}),
-        })}`,
+        `/api/orders?${new URLSearchParams(filters)}`,
       ),
   });
 
   const prefix = data?.orderNumberPrefix ?? '';
+  const hasFilters = Boolean(search || stage || from || to);
+
+  async function exportPdfs() {
+    setExporting({ done: 0, total: 0 });
+    try {
+      const payload = await apiGet<{
+        orders: PrintableOrder[];
+        total: number;
+        orderNumberPrefix: string;
+      }>(`/api/orders/export?${new URLSearchParams(filters)}`);
+
+      if (payload.orders.length === 0) {
+        toast.error('لا توجد أوردرات في هذه الفترة');
+        return;
+      }
+
+      setExporting({ done: 0, total: payload.orders.length });
+
+      const zip = await exportOrdersToPdfZip(
+        payload.orders,
+        payload.orderNumberPrefix,
+        setExporting,
+      );
+
+      const stamp = from && to ? `${from}_${to}` : from || to || 'الكل';
+      downloadBlob(zip, `أوردرات ${stamp}.zip`);
+      toast.success(`تم تصدير ${payload.orders.length} أوردر`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'تعذّر تصدير الأوردرات');
+    } finally {
+      setExporting(null);
+    }
+  }
 
   return (
     <div className="h-full overflow-y-auto">
@@ -72,6 +117,21 @@ export function OrdersList() {
           </div>
 
           <div className="flex-1" />
+
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={exportPdfs}
+            disabled={exporting !== null || !data || data.total === 0}
+            title="ملف PDF لكل أوردر، مجمّعة في ZIP واحد"
+          >
+            {exporting ? <Spinner /> : <Download className="h-4 w-4" />}
+            {exporting
+              ? exporting.total > 0
+                ? `جارٍ التصدير ${exporting.done}/${exporting.total}`
+                : 'جارٍ التحضير...'
+              : 'تصدير PDF'}
+          </button>
 
           {can('orders.create') ? (
             <button type="button" className="btn-primary" onClick={() => setCreateOpen(true)}>
@@ -105,6 +165,42 @@ export function OrdersList() {
               </option>
             ))}
           </select>
+
+          {/* الفترة محسوبة على تاريخ إنشاء الأوردر لا تاريخ تسليمه */}
+          <div className="flex items-center gap-1.5">
+            <span className="shrink-0 text-xs text-slate-500">من</span>
+            <input
+              type="date"
+              className="input w-auto"
+              value={from}
+              max={to || undefined}
+              onChange={(event) => setFrom(event.target.value)}
+              aria-label="من تاريخ الإنشاء"
+            />
+            <span className="shrink-0 text-xs text-slate-500">إلى</span>
+            <input
+              type="date"
+              className="input w-auto"
+              value={to}
+              min={from || undefined}
+              onChange={(event) => setTo(event.target.value)}
+              aria-label="إلى تاريخ الإنشاء"
+            />
+            {from || to ? (
+              <button
+                type="button"
+                className="btn-ghost h-9 w-9 shrink-0 !px-0 text-slate-400 hover:text-red-600"
+                onClick={() => {
+                  setFrom('');
+                  setTo('');
+                }}
+                aria-label="مسح فلتر الفترة"
+                title="مسح الفترة"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {isLoading ? (
@@ -113,9 +209,7 @@ export function OrdersList() {
           <EmptyState
             icon={ClipboardList}
             title="لا توجد أوردرات"
-            description={
-              search || stage ? 'جرّب تغيير كلمة البحث أو الفلتر' : 'ابدأ بإضافة أول أوردر'
-            }
+            description={hasFilters ? 'جرّب تغيير كلمة البحث أو الفلاتر' : 'ابدأ بإضافة أول أوردر'}
           />
         ) : (
           <>

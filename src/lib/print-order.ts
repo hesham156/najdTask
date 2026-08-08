@@ -98,7 +98,11 @@ function itemRow(item: PrintItem, index: number): string {
     </tr>`;
 }
 
-function buildHtml(order: PrintableOrder, orderNumberPrefix: string): string {
+/**
+ * مستند الأوردر كصفحة HTML مستقلة. مُصدَّر لأن التصدير الجماعي إلى PDF يعيد
+ * استخدامه حرفيًا، فيخرج ملف التصدير مطابقًا لما تراه في الطباعة.
+ */
+export function buildOrderHtml(order: PrintableOrder, orderNumberPrefix: string): string {
   const orderNo = `${orderNumberPrefix}${order.number}`;
   const orderFiles = order.attachments.filter((a) => !a.orderItemId);
 
@@ -187,7 +191,9 @@ function buildHtml(order: PrintableOrder, orderNumberPrefix: string): string {
       border-bottom: 2px solid var(--ink);
       margin-bottom: 20px;
     }
-    .brand { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+    /* بلا letter-spacing: تحويل المستند إلى صورة في التصدير يرسم الحروف واحدًا
+       واحدًا عند ضبطه، فتنفصل حروف الكلمة العربية وتضيع المسافات بين الكلمات */
+    .brand { font-size: 22px; font-weight: 800; }
     .brand small { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-top: 2px; }
     .order-no {
       font-size: 20px; font-weight: 800;
@@ -283,7 +289,7 @@ function buildHtml(order: PrintableOrder, orderNumberPrefix: string): string {
 
 /** يبني مستند الأوردر ويفتح نافذة الطباعة. يعيد false إذا منع المتصفح النافذة. */
 export function printOrder(order: PrintableOrder, orderNumberPrefix: string): boolean {
-  const html = buildHtml(order, orderNumberPrefix);
+  const html = buildOrderHtml(order, orderNumberPrefix);
   const win = window.open('', '_blank', 'width=900,height=700');
   if (!win) return false;
 
