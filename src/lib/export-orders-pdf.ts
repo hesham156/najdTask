@@ -4,9 +4,13 @@
  * لماذا هكذا:
  *  - المستند نفسه هو مستند الطباعة حرفيًا (buildOrderHtml)، فلا يوجد تنسيقان
  *    يفترقان مع الوقت.
- *  - نرسمه داخل iframe مخفي ثم نحوّله إلى صورة بـ html2canvas: المتصفح هو من
- *    يشكّل الحروف العربية ويوصلها، وهذا ما يجعل الناتج سليمًا. توليد PDF نصّي
- *    مباشرة من jsPDF لا يجيد تشكيل العربية، فيخرج الكلام مفكّكًا ومقلوبًا.
+ *  - نرسمه داخل iframe مخفي ثم نحوّله إلى صورة: المتصفح هو من يشكّل الحروف
+ *    العربية ويوصلها، وهذا ما يجعل الناتج سليمًا. توليد PDF نصّي مباشرة من
+ *    jsPDF لا يجيد تشكيل العربية، فيخرج الكلام مفكّكًا ومقلوبًا.
+ *  - نستعمل html2canvas-pro لا html2canvas الأصلية: الأصلية تضع سطر النص أسفل
+ *    موضعه داخل العناصر ذات line-height أكبر من حجم الخط، فينزل الكلام في
+ *    الشارات وخانات الجدول ولا يتوسّط مربّعه. الـ pro تحسبه صحيحًا فيخرج
+ *    التصدير مطابقًا للطباعة.
  *  - النتيجة صورة داخل PDF: مظهرها مطابق للطباعة لكن نصّها غير قابل للتحديد
  *    أو البحث. هذه هي المقايضة المقصودة.
  *  - الملفات تُجمَّع في ZIP لأن تنزيل عشرات الملفات دفعة واحدة يوقفه المتصفح.
@@ -70,7 +74,7 @@ async function orderToPdfBlob(
   order: PrintableOrder,
   orderNumberPrefix: string,
   jsPDF: typeof import('jspdf').jsPDF,
-  html2canvas: typeof import('html2canvas').default,
+  html2canvas: typeof import('html2canvas-pro').default,
 ): Promise<Blob> {
   const frame = await renderInFrame(buildOrderHtml(order, orderNumberPrefix));
 
@@ -143,7 +147,7 @@ export async function exportOrdersToPdfZip(
 ): Promise<Blob> {
   const [{ jsPDF }, html2canvasModule, JSZipModule] = await Promise.all([
     import('jspdf'),
-    import('html2canvas'),
+    import('html2canvas-pro'),
     import('jszip'),
   ]);
 

@@ -79,6 +79,16 @@ export const GET = route(async (request: Request) => {
         orderBy: { createdAt: 'desc' },
         select: { id: true, originalName: true, orderItemId: true },
       },
+      comments: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          body: true,
+          createdAt: true,
+          orderItemId: true,
+          user: { select: { id: true, name: true } },
+        },
+      },
     },
   });
 
@@ -86,7 +96,7 @@ export const GET = route(async (request: Request) => {
 
   return ok({
     orders: orders.map((order) => {
-      // مرفقات البنود المخفية عن هذا المستخدم يجب ألا تتسرب في التصدير
+      // مرفقات وملاحظات البنود المخفية عن هذا المستخدم يجب ألا تتسرب في التصدير
       const visibleItemIds = new Set(order.items.map((item) => item.id));
       return {
         id: order.id,
@@ -113,6 +123,14 @@ export const GET = route(async (request: Request) => {
         attachments: order.attachments.filter(
           (a) => !a.orderItemId || visibleItemIds.has(a.orderItemId),
         ),
+        comments: order.comments
+          .filter((c) => !c.orderItemId || visibleItemIds.has(c.orderItemId))
+          .map((c) => ({
+            id: c.id,
+            body: c.body,
+            createdAt: c.createdAt.toISOString(),
+            user: c.user,
+          })),
         invoiceNumber: order.invoiceNumber,
         invoiceAmount: order.invoiceAmount,
         invoicePaid: order.invoicePaid,

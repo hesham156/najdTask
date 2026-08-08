@@ -41,6 +41,14 @@ type PrintAttachment = {
   orderItemId: string | null;
 };
 
+/** ما يكتبه الفريق في خانة "اكتب ملاحظة للفريق" على الأوردر */
+type PrintComment = {
+  id: string;
+  body: string;
+  createdAt: string;
+  user: Person;
+};
+
 export type PrintableOrder = {
   number: number;
   description: string | null;
@@ -52,6 +60,7 @@ export type PrintableOrder = {
   createdBy: Person;
   items: PrintItem[];
   attachments: PrintAttachment[];
+  comments: PrintComment[];
   invoiceNumber: string | null;
   invoiceAmount: number | null;
   invoicePaid: boolean;
@@ -125,6 +134,25 @@ export function buildOrderHtml(order: PrintableOrder, orderNumberPrefix: string)
           </tbody>
         </table>`
       : `<p class="empty">لا توجد بنود شغل</p>`;
+
+  const notesBlock =
+    order.comments.length > 0
+      ? `<section class="block">
+          <h2>الملاحظات <span class="count">${order.comments.length}</span></h2>
+          <ul class="notes">
+            ${order.comments
+              .map(
+                (c) => `<li>
+                  <div class="note-body">${esc(c.body)}</div>
+                  <div class="note-meta">${esc(c.user.name)} — ${esc(
+                    formatDateTime(c.createdAt),
+                  )}</div>
+                </li>`,
+              )
+              .join('')}
+          </ul>
+        </section>`
+      : '';
 
   const filesBlock =
     orderFiles.length > 0
@@ -241,6 +269,13 @@ export function buildOrderHtml(order: PrintableOrder, orderNumberPrefix: string)
       border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca;
       border-radius: 4px; padding: 1px 6px;
     }
+    ul.notes { list-style: none; display: grid; gap: 6px; }
+    ul.notes li {
+      border: 1px solid var(--line); border-right: 3px solid #c7d2fe;
+      border-radius: 6px; padding: 8px 10px; background: #f8fafc;
+    }
+    .note-body { font-size: 13px; white-space: pre-wrap; }
+    .note-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
     ul.files { list-style: none; display: grid; gap: 6px; }
     ul.files li {
       font-size: 13px; border: 1px solid var(--line);
@@ -279,6 +314,7 @@ export function buildOrderHtml(order: PrintableOrder, orderNumberPrefix: string)
     ${itemsTable}
   </section>
 
+  ${notesBlock}
   ${filesBlock}
   ${invoiceBlock}
 
